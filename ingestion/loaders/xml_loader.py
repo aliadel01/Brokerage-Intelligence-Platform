@@ -1,14 +1,14 @@
 """
 Loader module for ingesting CustomerMgmt.xml into Snowflake Bronze Layer.
 
-Architectural Design Records (ADRs):
-    - ADR-002: Flattening nested XML into relational tables. Nested XML structure 
+Architectural Design Records:
+    - Flattening nested XML into relational tables. Nested XML structure 
       (<Action> -> <Customer> -> <Account>) lacks a natural single-table tabular 
       representation without high redundancy. Thus, it is split into two tables:
         1. bronze_customer_mgmt_event: Captures customer-level transactions (1 row per Action/Customer).
         2. bronze_customer_mgmt_account: Captures account-level states (1 row per nested Account),
            relationalized via foreign key (C_ID).
-    - ADR-007: Staging-driven Bulk Ingestion. Data is staged to local CSV files using a memory-safe
+    - Staging-driven Bulk Ingestion. Data is staged to local CSV files using a memory-safe
       writer before issuing a high-throughput Snowflake `COPY INTO` command.
 """
 

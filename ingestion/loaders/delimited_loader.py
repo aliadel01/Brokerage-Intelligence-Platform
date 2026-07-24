@@ -1,7 +1,7 @@
 """
 Generic loader for all delimited (pipe/comma) sources.
 
-Key design point (see ADR-001): sources like Trade, HoldingHistory,
+Key design point: sources like Trade, HoldingHistory,
 WatchHistory, DailyMarket have fewer columns in the Batch1 historical file
 than in Batch2/3 incremental files (no CDC_FLAG/CDC_DSN in Batch1). Rather
 than hardcode "batch 1 = no CDC" per source, this loader detects it directly
@@ -26,18 +26,6 @@ from ..snowflake_client import copy_into
 def load_delimited_source(conn, config: dict, filepath: Path, batch_id: int, tmp_dir: Path) -> int:
     """
     Load a delimited (CSV/PSV) source file into Snowflake.
-
-    Operational Steps:
-    1. Extract table schema, data casters, delimiter, and CDC capability flags from the configuration dictionary.
-    2. Build target output column definitions including system metadata fields (_batch_id, _source_file, _loaded_at, _row_hash).
-    3. Stream lines from the input file, ignoring empty/blank lines.
-    4. Resolve CDC flags/DSN values per line via _split_cdc() and enforce schema column counts.
-    5. Cast raw field values to target data types and generate a deterministic row hash for QA.
-    6. Stage normalized rows into a local CSV file in tmp_dir.
-    7. Execute PUT + COPY INTO to bulk load staged rows into the target Snowflake table.
-
-    Returns:
-        int: Total number of rows successfully loaded into Snowflake.
     """
     columns = config["columns"]
     base_names = [c[0] for c in columns]
@@ -46,6 +34,8 @@ def load_delimited_source(conn, config: dict, filepath: Path, batch_id: int, tmp
     target_table = config["target_table"]
     delimiter = config["delimiter"]
 
+    # Schema Projection: Build dynamic destination columns. Append operational metadata fields 
+    # to maintain strict auditing and row lineage in Snowflake.
     out_columns = base_names + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"]
     if cdc_capable:
         out_columns = ["_cdc_flag", "_cdc_dsn"] + out_columns
@@ -54,26 +44,30 @@ def load_delimited_source(conn, config: dict, filepath: Path, batch_id: int, tmp
     loaded_at = datetime.now(timezone.utc)
 
     def _iter_rows():
-        # Generator, not a list: write_staging_csv streams rows straight
-        # through to disk one at a time, so the whole source file never
-        # has to sit fully parsed in memory at once (important for the
-        # multi-GB fact tables like Trade/CashTransaction/DailyMarket).
+        # Memory-Efficient Generator: Stream-parses records line-by-line rather than 
+        # allocating entire multi-gigabyte files into memory, eliminating Out-Of-Memory risks.
         with open(filepath, "r", encoding="utf-8", newline="") as f:
             reader = csv.reader(f, delimiter=delimiter)
             for line_num, fields in enumerate(reader, start=1):
+                # Defensive Parsing: Ignore completely empty or whitespace-only lines to prevent downstream errors.
                 if not fields or (len(fields) == 1 and fields[0].strip() == ""):
                     continue  # skip blank lines
 
+                # Dynamic CDC Resolution: Handles historical vs incremental schema variations on a per-line basis.
                 cdc_flag, cdc_dsn, business_fields = _split_cdc(
                     fields, base_names, cdc_capable, filepath.name, line_num
                 )
 
+                # Schema Validation: Validate business column counts upfront before processing types.
                 if len(business_fields) != len(base_names):
                     raise ValueError(
                         f"{filepath.name} line {line_num}: expected {len(base_names)} "
                         f"business columns, got {len(business_fields)}"
                     )
 
+                # Data Normalization & Hash Calculation:
+                # 1. Cast raw string fields safely using type-specific converters.
+                # 2. Compute BLAKE2b hash across original raw business fields to capture state for future CDC comparisons.
                 values = [_safe_cast(raw, caster) for raw, caster in zip(business_fields, casters)]
                 row_hash = compute_row_hash(business_fields)
 
@@ -83,6 +77,8 @@ def load_delimited_source(conn, config: dict, filepath: Path, batch_id: int, tmp
                 yield row
 
     staging_path = tmp_dir / f"{target_table}_{filepath.stem}_b{batch_id}.csv"
+    
+    # Execution Guard: Write staging file in chunks and trigger bulk load only if valid records exist.
     count = write_staging_csv(staging_path, _iter_rows())
     if count == 0:
         return 0
@@ -92,28 +88,24 @@ def load_delimited_source(conn, config: dict, filepath: Path, batch_id: int, tmp
 def _split_cdc(fields, base_names, cdc_capable, filename, line_num):
     """
     Inspect a line's field count and extract or default its CDC attributes.
-
-    Operational Steps:
-    1. If source is not CDC capable, return None for CDC attributes and pass back raw fields.
-    2. If field count equals base columns + 2, extract CDC_FLAG and CDC_DSN directly from the first two positions.
-    3. If field count equals base columns only (Batch 1 historical pattern), inject backfill defaults ('I' for insert, 0 for DSN).
-    4. Raise ValueError if field count matches neither pattern (detects schema drift).
-
-    Returns:
-        tuple: (cdc_flag, cdc_dsn, business_fields)
     """
     n_base = len(base_names)
 
+    # Static Sources: Pass raw fields straight through if the source definition isn't CDC-tracked.
     if not cdc_capable:
         return None, None, fields
 
+    # Incremental Batch Pattern: CDC columns (`_cdc_flag`, `_cdc_dsn`) are prepended at indices 0 and 1.
     if len(fields) == n_base + 2:
         return fields[0], int(fields[1]), fields[2:]
 
+    # Historical Backfill Pattern (Batch 1):
+    # Files in Batch 1 lack CDC headers. Automatically backfill default values 
+    # ('I' = Insert, 0 = DSN baseline) to align schemas without breaking execution.
     if len(fields) == n_base:
-        # Batch1-style row with no CDC columns -> backfill per ADR-001.
         return "I", 0, fields
 
+    # Schema Drift Guard: Throw an explicit exception if the line length doesn't match expected historical or incremental specs.
     raise ValueError(
         f"{filename} line {line_num}: unexpected column count {len(fields)} "
         f"(expected {n_base} or {n_base + 2} for a CDC-capable source)"

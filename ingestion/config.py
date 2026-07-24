@@ -11,9 +11,7 @@ Each entry:
   cdc_capable    - whether this source's schema includes CDC_FLAG/CDC_DSN
                     in *some* batches (Batch1 vs Batch2/3 divergence).
                     The loader auto-detects, per line, whether CDC columns
-                    are actually present by comparing field counts — see
-                    ADR-001 for why this is done at the line level rather
-                    than being hardcoded per batch.
+                    are actually present by comparing field counts.
   columns        - ordered list of (business_column_name, caster) tuples,
                     matching the file's column order EXCLUDING any
                     CDC_FLAG/CDC_DSN prefix.

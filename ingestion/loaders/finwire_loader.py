@@ -91,17 +91,19 @@ def _split_fixed(line: str, field_specs: List[Tuple[str, int, Any]]) -> Tuple[Di
         - Dict[str, Any]: Extracted field names mapped to their safely cast values.
         - str: Unparsed remainder of the line (used for variable trailing fields).
     """
+    # Offset starts right after the fixed header: PTS (15 chars) + RecType (3 chars)
     offset = PTS_WIDTH + RECTYPE_WIDTH
     values = {}
     
     for name, width, caster in field_specs:
-        # Extract slice and trim padding spaces
+        # Fixed-Width Slicing: Extract exact character slice and strip space padding
         raw = line[offset : offset + width].strip()
         offset += width
         
-        # Apply type casting via centralized safe casting pattern
+        # Centralized Casting Pattern: Convert valid raw strings or assign None
         values[name] = _safe_cast(raw, caster) if raw else None
         
+    # Capture unparsed remainder for downstream variable length handling (e.g., CoNameOrCIK)
     remainder = line[offset:].strip()
     return values, remainder
 
@@ -150,12 +152,10 @@ def load_finwire_source(conn: Any, filepath: Path, batch_id: int, tmp_dir: Path)
     sec_path = tmp_dir / f"finwire_sec_{filepath.name}_b{batch_id}.csv"
     fin_path = tmp_dir / f"finwire_fin_{filepath.name}_b{batch_id}.csv"
 
-    # Three writers stay open across the single pass over the file so each
-    # record type is flushed to its own staging CSV as soon as it's parsed,
-    # rather than accumulating cmp_rows/sec_rows/fin_rows in memory for the
-    # whole file (FINWIRE quarterly files interleave all three types, so the
-    # old approach held the full parsed file 3x over in RAM before writing
-    # anything).
+    # Multi-Writer Stream Design:
+    # Open three persistent file handles simultaneously. Interleaved lines are routed
+    # directly to their corresponding CSV target, keeping memory overhead minimal O(1)
+    # regardless of input file size.
     with StreamingCsvWriter(cmp_path) as cmp_w, \
          StreamingCsvWriter(sec_path) as sec_w, \
          StreamingCsvWriter(fin_path) as fin_w:
@@ -166,12 +166,12 @@ def load_finwire_source(conn: Any, filepath: Path, batch_id: int, tmp_dir: Path)
                 if not line.strip():
                     continue
 
-                # Extract fixed header offsets (PTS + RecType)
+                # Header Extraction: PTS timestamp (15 chars) and RecType discriminator (3 chars)
                 pts_raw = line[:PTS_WIDTH].strip()
                 rectype = line[PTS_WIDTH : PTS_WIDTH + RECTYPE_WIDTH].strip()
                 pts = _safe_cast(pts_raw, lambda v: datetime.strptime(v, "%Y%m%d-%H%M%S"))
 
-                # Dispatch line parsing based on Record Type
+                # Dynamic Dispatch Logic
                 if rectype == "CMP":
                     values, _ = _split_fixed(line, CMP_FIELDS)
                     row_hash = compute_row_hash(list(values.values()))
@@ -200,6 +200,7 @@ def load_finwire_source(conn: Any, filepath: Path, batch_id: int, tmp_dir: Path)
 
     total_loaded = 0
 
+    # Bulk Ingestion Phase: Execute COPY INTO for populated staging target files
     if cmp_w.count:
         cols = ["PTS"] + [f[0] for f in CMP_FIELDS] + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"]
         total_loaded += copy_into(conn, "bronze_finwire_cmp", cols, cmp_path)

@@ -21,36 +21,38 @@ from typing import Any, Callable, Iterable, List, Optional, Sequence
 def compute_row_hash(values: Sequence[Any]) -> int:
     """
     Generate a deterministic 64-bit integer hash from a list of business column values.
-
-    Uses blake2b with an 8-byte digest rather than SHA-256 truncated to 8 bytes:
-    this is a dedup/lineage hash, not a security boundary, so there's no reason
-    to pay for a cryptographic 256-bit digest and then throw away 24 of the
-    32 bytes. blake2b(digest_size=8) is materially faster per call and this
-    function runs once per ingested row, across every table.
     """
+    # Defensive Concatenation: Normalize NULLs to empty strings before joining to prevent type mismatches.
     joined = "|".join("" if v is None else str(v) for v in values).encode("utf-8")
+    
+    # Hash Selection Strategy: BLAKE2b with digest_size=8 generates a native 64-bit hash directly.
+    # This avoids the CPU overhead of computing a full 256-bit SHA-256 digest only to truncate it,
+    # optimizing execution speed across millions of ingested rows.
     digest = hashlib.blake2b(joined, digest_size=8).digest()
     return int.from_bytes(digest, byteorder="big", signed=False)
 
 
-# Standard Caster Lambdas
+# Standard Caster Lambdas: Centralized parsing routines ensuring uniform string-to-type conversion rules across all loaders.
 parse_date = lambda v: datetime.strptime(v, "%Y-%m-%d").date()
 parse_datetime = lambda v: datetime.strptime(v, "%Y-%m-%d %H:%M:%S")
 parse_bool = lambda v: v in ("1", "true", "True", "Y", "y")
+
+# Edge Case Handling: TPC-DI and legacy batch files often represent empty or default dates as '00000000'.
 parse_yyyymmdd = lambda v: None if set(v) == {"0"} else datetime.strptime(v, "%Y%m%d").date()
 
 
 def format_csv_value(value: Any) -> str:
     """
-    Render a Python value into the exact string form the Snowflake file
-    format (ff_bronze_csv) expects: ISO dates, ISO-ish timestamps,
-    TRUE/FALSE for booleans, empty string for NULL (matches NULL_IF=('')
-    and EMPTY_FIELD_AS_NULL=TRUE in the file format DDL).
+    Render a Python value into the exact string form expected by Snowflake's COPY INTO file format.
     """
+    # NULL Alignment: Return empty string to match Snowflake DDL parameters (NULL_IF=('') & EMPTY_FIELD_AS_NULL=TRUE).
     if value is None:
         return ""
     if isinstance(value, bool):
         return "TRUE" if value else "FALSE"
+    
+    # Precision Truncation: Slices datetime microseconds from 6 digits to 3 digits (.fff)
+    # to enforce millisecond precision compatibility with Snowflake TIMESTAMP_NTZ columns.
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     if isinstance(value, date):
@@ -60,35 +62,17 @@ def format_csv_value(value: Any) -> str:
     return str(value)
 
 
-# Rows are buffered and flushed in batches of this size rather than either
-# (a) writing the whole file's rows in one shot, or (b) issuing one
-# writer.writerow() call per row. (a) means peak memory scales with file
-# size — risky for multi-GB fact tables. (b) is memory-safe but pays Python
-# function-call/formatting overhead per row with nothing amortized. Chunking
-# bounds memory to ~chunk_size rows while batching the writes, which is the
-# practical middle ground. 5000 rows/chunk is a reasonable default for
-# typical bronze row widths (roughly hundreds of KB per chunk); tune per
-# table if a source has unusually wide rows.
+# Memory Boundary Optimization:
+# Streaming multi-gigabyte files row-by-row creates Python I/O bottlenecks, while loading 
+# an entire file into memory causes OOM (Out Of Memory) errors. 
+# Buffering 5,000 rows balances memory consumption (~few hundred KB) with high disk write throughput.
 DEFAULT_CHUNK_SIZE = 5000
 
 
 class StreamingCsvWriter:
     """
-    Chunked staging CSV writer, for loaders that need to fan a single
-    streamed input (e.g. one interleaved FINWIRE file, one XML tree) out to
-    several target tables at once. Unlike write_staging_csv, which takes a
-    single iterable start-to-finish, this lets several writers stay open
-    concurrently so no output table's rows need to be fully buffered while
-    the others are still being parsed. Internally it batches rows into
-    chunks of `chunk_size` before each write, per DEFAULT_CHUNK_SIZE above.
-    
-    * This class works as a context manager so it can be used in a `with` block.
-
-    Usage:
-        with StreamingCsvWriter(path) as w:
-            for row in rows:
-                w.write(row)
-        w.count  # rows written
+    Chunked staging CSV writer for loaders that fan out a single streamed input 
+    (e.g., interleaved FINWIRE flat files or XML streams) to multiple target tables simultaneously.
     """
 
     def __init__(self, path, chunk_size: int = DEFAULT_CHUNK_SIZE):
@@ -96,21 +80,25 @@ class StreamingCsvWriter:
         self.count = 0
         self.chunk_size = chunk_size
         self._buffer: List[List[str]] = []
+        # Explicit File Protocols: Always use newline="" for Python csv module to prevent double carriage-returns on Windows/Linux environments.
         self._f = open(path, "w", newline="", encoding="utf-8")
         self._writer = csv.writer(self._f, delimiter=",", quoting=csv.QUOTE_MINIMAL)
 
     def write(self, row: Sequence[Any]) -> None:
+        """Buffers formatted rows and triggers a disk flush when chunk size is reached."""
         self.count += 1
         self._buffer.append([format_csv_value(v) for v in row])
         if len(self._buffer) >= self.chunk_size:
             self._flush()
 
     def _flush(self) -> None:
+        """Batch-writes accumulated rows using writerows() for reduced I/O calls, then clears memory."""
         if self._buffer:
             self._writer.writerows(self._buffer)
             self._buffer.clear()
 
     def close(self) -> None:
+        """Ensures remaining buffered rows are flushed to disk before closing the file handle."""
         self._flush()
         self._f.close()
 
@@ -118,17 +106,15 @@ class StreamingCsvWriter:
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        """Guarantees resource cleanup even if exceptions are raised during execution."""
         self.close()
         return False
 
 
 def write_staging_csv(path: str, rows: Iterable[Sequence[Any]],
-                       chunk_size: int = DEFAULT_CHUNK_SIZE) -> int:
+                      chunk_size: int = DEFAULT_CHUNK_SIZE) -> int:
     """
-    Writes rows to a CSV file in fixed-size chunks: each chunk is formatted
-    in memory and flushed with a single writerows() call, then discarded.
-    Bounds peak memory to `chunk_size` rows regardless of source file size,
-    while batching writes instead of issuing one per row.
+    Writes sequential row iterables to a CSV staging file using memory-bounded chunking.
     """
     count = 0
     chunk: List[List[str]] = []
@@ -140,6 +126,8 @@ def write_staging_csv(path: str, rows: Iterable[Sequence[Any]],
             if len(chunk) >= chunk_size:
                 writer.writerows(chunk)
                 chunk.clear()
+        
+        # Flush Remainder: Writes any residual rows that didn't fill the final chunk.
         if chunk:
             writer.writerows(chunk)
 
@@ -148,8 +136,8 @@ def write_staging_csv(path: str, rows: Iterable[Sequence[Any]],
 
 def _safe_cast(raw: Any, caster: Callable[[str], Any]) -> Optional[Any]:
     """
-    Safely casts a raw value using the provided caster function, 
-    returning None for empty or invalid values.
+    Safely converts dirty raw strings into strong Python data types, suppressing 
+    parsing exceptions to ensure pipeline resilience against corrupt records.
     """
     if raw is None:
         return None
@@ -161,4 +149,6 @@ def _safe_cast(raw: Any, caster: Callable[[str], Any]) -> Optional[Any]:
     try:
         return caster(raw)
     except Exception:
+        # Fault Tolerance Strategy: Returns None for bad/malformed data to allow the row to land 
+        # in the Bronze layer, deferring data quality flags/rejection later.
         return None

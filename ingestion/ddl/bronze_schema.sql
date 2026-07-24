@@ -12,7 +12,7 @@
 --       _cdc_flag     VARCHAR(1)          -- 'I' / 'U', backfilled to 'I' for Batch1
 --       _cdc_dsn      NUMBER(20,0)        -- backfilled to 0 for Batch1
 --   - No manual partitioning: Snowflake micro-partitions automatically on
---     load. CLUSTER BY is deliberately NOT applied here — see ADR-004-v2.
+--     load. CLUSTER BY is deliberately NOT applied here.
 --     Add it later, per table, only if query profiles show poor pruning at
 --     real data volume; premature clustering keys just cost reclustering
 --     credits for no benefit on tables this size.
@@ -27,7 +27,6 @@ USE SCHEMA brokerage_dwh.bronze;
 -- ----------------------------------------------------------------------------
 -- Staging file format + internal stage used by the ingestion loaders.
 -- All loaders normalize rows into a uniform CSV shape before COPY INTO —
--- see ADR-007 for why this replaced row-by-row INSERT.
 -- ----------------------------------------------------------------------------
 
 CREATE FILE FORMAT IF NOT EXISTS brokerage_dwh.bronze.ff_bronze_csv
@@ -164,7 +163,7 @@ CREATE TABLE IF NOT EXISTS bronze_hr
 -- ============================================================================
 -- ARCHETYPE B — Schema-shifting CDC facts
 -- Union schema: _cdc_flag/_cdc_dsn always present, backfilled ('I', 0) for
--- Batch1 rows where the source file itself carries no CDC columns. See ADR-001.
+-- Batch1 rows where the source file itself carries no CDC columns. 
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS bronze_account
@@ -254,7 +253,7 @@ CREATE TABLE IF NOT EXISTS bronze_trade
     _row_hash            NUMBER(20,0)
 );
 -- At scale, consider: ALTER TABLE bronze_trade CLUSTER BY (_batch_id); only
--- once table size and query profile justify it (see ADR-004-v2).
+-- once table size and query profile justify it.
 
 CREATE TABLE IF NOT EXISTS bronze_holding_history
 (
@@ -500,7 +499,7 @@ CREATE TABLE IF NOT EXISTS bronze_batch_control
 );
 
 -- Reconciliation ground truth, sourced from *_audit.csv per component/batch.
--- Used to validate bronze row counts against vendor-reported counts (ADR-005).
+-- Used to validate bronze row counts against vendor-reported counts.
 CREATE TABLE IF NOT EXISTS bronze_source_audit
 (
     DataSet              VARCHAR,

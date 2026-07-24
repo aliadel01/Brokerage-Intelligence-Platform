@@ -2,7 +2,7 @@
 Snowflake connection handling and the stage-and-load primitive every
 loader uses. Snowflake's efficient path for file-based sources is
 PUT (local file -> internal stage) + COPY INTO (stage -> table), not
-row-by-row INSERT — see ADR-007.
+row-by-row INSERT.
 """
 from pathlib import Path
 
