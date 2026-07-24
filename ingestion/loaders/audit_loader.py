@@ -22,35 +22,34 @@ def load_audit_source(conn, filepath: Path, batch_id: int, tmp_dir: Path) -> int
     """
     source_file = filepath.name
     loaded_at = datetime.now(timezone.utc)
-    rows = []
 
-    with open(filepath, "r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        
-        # Trim whitespace from header names because the actual CSV files have trailing spaces in the header row.
-        if reader.fieldnames:
-            reader.fieldnames = [name.strip() for name in reader.fieldnames if name]
-    
-        for record in reader:
-            rows.append([
-                _safe_cast(record.get("DataSet"), str),
-                _safe_cast(record.get("BatchID"), int),
-                _safe_cast(record.get("Date"), lambda d: datetime.strptime(d, "%Y-%m-%d").date()),
-                _safe_cast(record.get("Attribute"), str),
-                _safe_cast(record.get("Value"), int),
-                _safe_cast(record.get("DValue"), Decimal),
-                batch_id,
-                source_file,
-                loaded_at,
-            ])
+    def _iter_rows():
+        with open(filepath, "r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
 
-    if not rows:
-        return 0
+            # Trim whitespace from header names because the actual CSV files have trailing spaces in the header row.
+            if reader.fieldnames:
+                reader.fieldnames = [name.strip() for name in reader.fieldnames if name]
+
+            for record in reader:
+                yield [
+                    _safe_cast(record.get("DataSet"), str),
+                    _safe_cast(record.get("BatchID"), int),
+                    _safe_cast(record.get("Date"), lambda d: datetime.strptime(d, "%Y-%m-%d").date()),
+                    _safe_cast(record.get("Attribute"), str),
+                    _safe_cast(record.get("Value"), int),
+                    _safe_cast(record.get("DValue"), Decimal),
+                    batch_id,
+                    source_file,
+                    loaded_at,
+                ]
 
     cols = ["DataSet", "BatchID", "Date", "Attribute", "Value", "DValue",
             "_batch_id", "_source_file", "_loaded_at"]
     path = tmp_dir / f"audit_{filepath.stem}_b{batch_id}.csv"
-    write_staging_csv(path, rows)
+    count = write_staging_csv(path, _iter_rows())
+    if count == 0:
+        return 0
     return copy_into(conn, "bronze_source_audit", cols, path)
 
 

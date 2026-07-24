@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Tuple
 
-from ..common import compute_row_hash, write_staging_csv
+from ..common import compute_row_hash, StreamingCsvWriter
 from ..snowflake_client import copy_into
 
 
@@ -53,113 +53,107 @@ def load_customer_mgmt_xml(
     source_file = filepath.name
     loaded_at = datetime.now(timezone.utc)
 
-    # 2. XML DOM Parsing
-    tree = ET.parse(filepath)
-    root = tree.getroot()
-    
     # TPC-DI XML files use a default namespace (xmlns:TPCDI="http://www.tpc.org/tpc-di").
-    # Without passing a namespace map (ns), ElementTree expects elements without prefixes 
-    # and fails to match tags like '{http://www.tpc.org/tpc-di}Action', returning empty lists.
-    ns = {"tpcdi": "http://www.tpc.org/tpc-di"}
-    actions = root.findall(".//tpcdi:Action", ns)
+    NS_URI = "http://www.tpc.org/tpc-di"
+    ACTION_TAG = f"{{{NS_URI}}}Action"
 
-    # In-memory record buffers for bulk staging
-    event_rows = []
-    account_rows = []
+    event_path = tmp_dir / f"customer_mgmt_event_b{batch_id}.csv"
+    account_path = tmp_dir / f"customer_mgmt_account_b{batch_id}.csv"
 
-    # 3. Iterative Entity Extraction & Flattening
-    for action in actions:
-        action_type = action.get("ActionType")
-        # Standardize timestamp ISO string to naive Python datetime object
-        action_ts = datetime.strptime(action.get("ActionTS"), "%Y-%m-%dT%H:%M:%S")
+    # 2/3. Streaming DOM parse + flatten: iterparse fires "end" events as each
+    # element closes, and elem.clear() drops that element's children once
+    # we're done with it, so memory stays roughly proportional to one Action
+    # block rather than the whole document (CustomerMgmt.xml can be large).
+    # Two writers stay open concurrently so events/accounts are flushed to
+    # disk as they're produced instead of being buffered in Python lists.
+    with StreamingCsvWriter(event_path) as event_w, \
+         StreamingCsvWriter(account_path) as account_w:
 
-        customer = action.find("Customer")
-        if customer is None:
-            # Guard clause: skip malformed action blocks missing customer details
-            continue
+        for _event, action in ET.iterparse(filepath, events=("end",)):
+            if action.tag != ACTION_TAG:
+                continue
 
-        # Extract mandatory & optional Customer attributes
-        c_id = int(customer.get("C_ID"))
-        c_tax_id = customer.get("C_TAX_ID")
-        c_gndr = customer.get("C_GNDR")
-        c_tier_raw = customer.get("C_TIER")
-        c_dob_raw = customer.get("C_DOB")
+            action_type = action.get("ActionType")
+            # Standardize timestamp ISO string to naive Python datetime object
+            action_ts = datetime.strptime(action.get("ActionTS"), "%Y-%m-%dT%H:%M:%S")
 
-        # Extract nested TaxInfo child node if available
-        tax_info = customer.find("TaxInfo")
-        c_lcl_tx_id = tax_info.findtext("C_LCL_TX_ID") if tax_info is not None else None
-        c_nat_tx_id = tax_info.findtext("C_NAT_TX_ID") if tax_info is not None else None
+            customer = action.find("Customer")
+            if customer is None:
+                # Guard clause: skip malformed action blocks missing customer details
+                action.clear()
+                continue
 
-        # Build Customer Event Business Record with cast data types
-        event_values = [
-            action_type,
-            action_ts,
-            c_id,
-            c_tax_id,
-            c_gndr,
-            int(c_tier_raw) if c_tier_raw else None,
-            datetime.strptime(c_dob_raw, "%Y-%m-%d").date() if c_dob_raw else None,
-            c_lcl_tx_id,
-            c_nat_tx_id,
-        ]
-        
-        # Calculate row hash across business values for CDC/deduplication support
-        row_hash = compute_row_hash(event_values)
-        
-        # Append business values alongside lineage audit columns
-        event_rows.append(event_values + [batch_id, source_file, loaded_at, row_hash])
+            # Extract mandatory & optional Customer attributes
+            c_id = int(customer.get("C_ID"))
+            c_tax_id = customer.get("C_TAX_ID")
+            c_gndr = customer.get("C_GNDR")
+            c_tier_raw = customer.get("C_TIER")
+            c_dob_raw = customer.get("C_DOB")
 
-        # Extract 1-to-N nested <Account> entities bound to parent Customer ID (c_id)
-        for acct in customer.findall("Account"):
-            ca_id = int(acct.get("CA_ID"))
-            ca_tax_st_raw = acct.get("CA_TAX_ST")
-            ca_b_id_raw = acct.findtext("CA_B_ID")
-            ca_name = acct.findtext("CA_NAME")
+            # Extract nested TaxInfo child node if available
+            tax_info = customer.find("TaxInfo")
+            c_lcl_tx_id = tax_info.findtext("C_LCL_TX_ID") if tax_info is not None else None
+            c_nat_tx_id = tax_info.findtext("C_NAT_TX_ID") if tax_info is not None else None
 
-            acct_values = [
+            # Build Customer Event Business Record with cast data types
+            event_values = [
+                action_type,
                 action_ts,
-                c_id,  # Foreign key linkage to parent customer
-                ca_id,
-                int(ca_tax_st_raw) if ca_tax_st_raw else None,
-                int(ca_b_id_raw) if ca_b_id_raw else None,
-                ca_name,
+                c_id,
+                c_tax_id,
+                c_gndr,
+                int(c_tier_raw) if c_tier_raw else None,
+                datetime.strptime(c_dob_raw, "%Y-%m-%d").date() if c_dob_raw else None,
+                c_lcl_tx_id,
+                c_nat_tx_id,
             ]
-            
-            acct_row_hash = compute_row_hash(acct_values)
-            account_rows.append(acct_values + [batch_id, source_file, loaded_at, acct_row_hash])
+
+            # Calculate row hash across business values for CDC/deduplication support
+            row_hash = compute_row_hash(event_values)
+            event_w.write(event_values + [batch_id, source_file, loaded_at, row_hash])
+
+            # Extract 1-to-N nested <Account> entities bound to parent Customer ID (c_id)
+            for acct in customer.findall("Account"):
+                ca_id = int(acct.get("CA_ID"))
+                ca_tax_st_raw = acct.get("CA_TAX_ST")
+                ca_b_id_raw = acct.findtext("CA_B_ID")
+                ca_name = acct.findtext("CA_NAME")
+
+                acct_values = [
+                    action_ts,
+                    c_id,  # Foreign key linkage to parent customer
+                    ca_id,
+                    int(ca_tax_st_raw) if ca_tax_st_raw else None,
+                    int(ca_b_id_raw) if ca_b_id_raw else None,
+                    ca_name,
+                ]
+
+                acct_row_hash = compute_row_hash(acct_values)
+                account_w.write(acct_values + [batch_id, source_file, loaded_at, acct_row_hash])
+
+            # Free this Action's subtree now that it's been flattened to CSV.
+            action.clear()
 
     total = 0
 
-    # 4. Staging & Loading — Customer Event Table
-    if event_rows:
+    # 4. Loading — Customer Event Table
+    if event_w.count:
         cols = [
             "ActionType", "ActionTS", "C_ID", "C_TAX_ID", "C_GNDR", "C_TIER", "C_DOB",
             "C_LCL_TX_ID", "C_NAT_TX_ID", "_batch_id", "_source_file", "_loaded_at", "_row_hash"
         ]
-        path = tmp_dir / f"customer_mgmt_event_b{batch_id}.csv"
-        
-        # Write buffer to streaming local CSV file
-        write_staging_csv(path, event_rows)
-        
-        # Execute Snowflake COPY INTO bulk load command
-        total += copy_into(conn, "bronze_customer_mgmt_event", cols, path)
+        total += copy_into(conn, "bronze_customer_mgmt_event", cols, event_path)
 
-    # 5. Staging & Loading — Customer Account Table
-    if account_rows:
+    # 5. Loading — Customer Account Table
+    if account_w.count:
         cols = [
             "ActionTS", "C_ID", "CA_ID", "CA_TAX_ST", "CA_B_ID", "CA_NAME",
             "_batch_id", "_source_file", "_loaded_at", "_row_hash"
         ]
-        path = tmp_dir / f"customer_mgmt_account_b{batch_id}.csv"
-        
-        # Write buffer to streaming local CSV file
-        write_staging_csv(path, account_rows)
-        
-        # Execute Snowflake COPY INTO bulk load command
-        total += copy_into(conn, "bronze_customer_mgmt_account", cols, path)
+        total += copy_into(conn, "bronze_customer_mgmt_account", cols, account_path)
 
     # Return row execution counts for data quality and pipeline metric logging
-    return len(event_rows), len(account_rows)
+    return event_w.count, account_w.count
 
 if __name__ == "__main__":
     # Example usage for local testing
@@ -170,5 +164,3 @@ if __name__ == "__main__":
     batch_id = 1
     tmp_dir = Path("/tmp")
     xml_path = Path("data/Batch1/CustomerMgmt.xml")
-
-    

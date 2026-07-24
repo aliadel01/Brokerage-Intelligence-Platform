@@ -23,7 +23,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..common import _safe_cast, compute_row_hash, parse_yyyymmdd, write_staging_csv
+from ..common import _safe_cast, compute_row_hash, parse_yyyymmdd, StreamingCsvWriter
 from ..snowflake_client import copy_into
 
 # Fixed-width offset constants (Characters)
@@ -146,73 +146,72 @@ def load_finwire_source(conn: Any, filepath: Path, batch_id: int, tmp_dir: Path)
     source_file = filepath.name
     loaded_at = datetime.now(timezone.utc)
 
-    # In-memory accumulators for partitioned record types
-    cmp_rows: List[List[Any]] = []
-    sec_rows: List[List[Any]] = []
-    fin_rows: List[List[Any]] = []
+    cmp_path = tmp_dir / f"finwire_cmp_{filepath.name}_b{batch_id}.csv"
+    sec_path = tmp_dir / f"finwire_sec_{filepath.name}_b{batch_id}.csv"
+    fin_path = tmp_dir / f"finwire_fin_{filepath.name}_b{batch_id}.csv"
 
-    # Stream file line-by-line to prevent high memory footprint
-    with open(filepath, "r", encoding="utf-8") as f:
-        for line_num, raw_line in enumerate(f, start=1):
-            line = raw_line.rstrip("\n").rstrip("\r")
-            if not line.strip():
-                continue
+    # Three writers stay open across the single pass over the file so each
+    # record type is flushed to its own staging CSV as soon as it's parsed,
+    # rather than accumulating cmp_rows/sec_rows/fin_rows in memory for the
+    # whole file (FINWIRE quarterly files interleave all three types, so the
+    # old approach held the full parsed file 3x over in RAM before writing
+    # anything).
+    with StreamingCsvWriter(cmp_path) as cmp_w, \
+         StreamingCsvWriter(sec_path) as sec_w, \
+         StreamingCsvWriter(fin_path) as fin_w:
 
-            # Extract fixed header offsets (PTS + RecType)
-            pts_raw = line[:PTS_WIDTH].strip()
-            rectype = line[PTS_WIDTH : PTS_WIDTH + RECTYPE_WIDTH].strip()
-            pts = _safe_cast(pts_raw, lambda v: datetime.strptime(v, "%Y%m%d-%H%M%S"))
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line_num, raw_line in enumerate(f, start=1):
+                line = raw_line.rstrip("\n").rstrip("\r")
+                if not line.strip():
+                    continue
 
-            # Dispatch line parsing based on Record Type
-            if rectype == "CMP":
-                values, _ = _split_fixed(line, CMP_FIELDS)
-                row_hash = compute_row_hash(list(values.values()))
-                cmp_rows.append(
-                    [pts] + list(values.values()) + [batch_id, source_file, loaded_at, row_hash]
-                )
-                
-            elif rectype == "SEC":
-                values, remainder = _split_fixed(line, SEC_FIELDS)
-                co_name, co_cik = _resolve_co_name_or_cik(remainder)
-                row_hash = compute_row_hash(list(values.values()) + [remainder])
-                sec_rows.append(
-                    [pts] + list(values.values()) + [co_name, co_cik, batch_id, source_file, loaded_at, row_hash]
-                )
-                
-            elif rectype == "FIN":
-                values, remainder = _split_fixed(line, FIN_FIELDS)
-                co_name, co_cik = _resolve_co_name_or_cik(remainder)
-                row_hash = compute_row_hash(list(values.values()) + [remainder])
-                fin_rows.append(
-                    [pts] + list(values.values()) + [co_name, co_cik, batch_id, source_file, loaded_at, row_hash]
-                )
-                
-            else:
-                raise ValueError(f"{filepath.name} line {line_num}: unknown RecType '{rectype}'")
+                # Extract fixed header offsets (PTS + RecType)
+                pts_raw = line[:PTS_WIDTH].strip()
+                rectype = line[PTS_WIDTH : PTS_WIDTH + RECTYPE_WIDTH].strip()
+                pts = _safe_cast(pts_raw, lambda v: datetime.strptime(v, "%Y%m%d-%H%M%S"))
+
+                # Dispatch line parsing based on Record Type
+                if rectype == "CMP":
+                    values, _ = _split_fixed(line, CMP_FIELDS)
+                    row_hash = compute_row_hash(list(values.values()))
+                    cmp_w.write(
+                        [pts] + list(values.values()) + [batch_id, source_file, loaded_at, row_hash]
+                    )
+
+                elif rectype == "SEC":
+                    values, remainder = _split_fixed(line, SEC_FIELDS)
+                    co_name, co_cik = _resolve_co_name_or_cik(remainder)
+                    row_hash = compute_row_hash(list(values.values()) + [remainder])
+                    sec_w.write(
+                        [pts] + list(values.values()) + [co_name, co_cik, batch_id, source_file, loaded_at, row_hash]
+                    )
+
+                elif rectype == "FIN":
+                    values, remainder = _split_fixed(line, FIN_FIELDS)
+                    co_name, co_cik = _resolve_co_name_or_cik(remainder)
+                    row_hash = compute_row_hash(list(values.values()) + [remainder])
+                    fin_w.write(
+                        [pts] + list(values.values()) + [co_name, co_cik, batch_id, source_file, loaded_at, row_hash]
+                    )
+
+                else:
+                    raise ValueError(f"{filepath.name} line {line_num}: unknown RecType '{rectype}'")
 
     total_loaded = 0
 
-    # Staging & Bulk Ingestion: Bronze Company Table
-    if cmp_rows:
+    if cmp_w.count:
         cols = ["PTS"] + [f[0] for f in CMP_FIELDS] + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"]
-        path = tmp_dir / f"finwire_cmp_{filepath.name}_b{batch_id}.csv"
-        write_staging_csv(path, cmp_rows)
-        total_loaded += copy_into(conn, "bronze_finwire_cmp", cols, path)
+        total_loaded += copy_into(conn, "bronze_finwire_cmp", cols, cmp_path)
 
-    # Staging & Bulk Ingestion: Bronze Security Table
-    if sec_rows:
+    if sec_w.count:
         cols = (["PTS"] + [f[0] for f in SEC_FIELDS] + ["CoName", "CoCIK"]
                 + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"])
-        path = tmp_dir / f"finwire_sec_{filepath.name}_b{batch_id}.csv"
-        write_staging_csv(path, sec_rows)
-        total_loaded += copy_into(conn, "bronze_finwire_sec", cols, path)
+        total_loaded += copy_into(conn, "bronze_finwire_sec", cols, sec_path)
 
-    # Staging & Bulk Ingestion: Bronze Financial Table
-    if fin_rows:
+    if fin_w.count:
         cols = (["PTS"] + [f[0] for f in FIN_FIELDS] + ["CoName", "CoCIK"]
                 + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"])
-        path = tmp_dir / f"finwire_fin_{filepath.name}_b{batch_id}.csv"
-        write_staging_csv(path, fin_rows)
-        total_loaded += copy_into(conn, "bronze_finwire_fin", cols, path)
+        total_loaded += copy_into(conn, "bronze_finwire_fin", cols, fin_path)
 
     return total_loaded

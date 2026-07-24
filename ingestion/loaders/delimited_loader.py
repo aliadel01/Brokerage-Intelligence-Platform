@@ -52,37 +52,40 @@ def load_delimited_source(conn, config: dict, filepath: Path, batch_id: int, tmp
 
     source_file = filepath.name
     loaded_at = datetime.now(timezone.utc)
-    rows = []
 
-    with open(filepath, "r", encoding="utf-8", newline="") as f:
-        reader = csv.reader(f, delimiter=delimiter)
-        for line_num, fields in enumerate(reader, start=1):
-            if not fields or (len(fields) == 1 and fields[0].strip() == ""):
-                continue  # skip blank lines
+    def _iter_rows():
+        # Generator, not a list: write_staging_csv streams rows straight
+        # through to disk one at a time, so the whole source file never
+        # has to sit fully parsed in memory at once (important for the
+        # multi-GB fact tables like Trade/CashTransaction/DailyMarket).
+        with open(filepath, "r", encoding="utf-8", newline="") as f:
+            reader = csv.reader(f, delimiter=delimiter)
+            for line_num, fields in enumerate(reader, start=1):
+                if not fields or (len(fields) == 1 and fields[0].strip() == ""):
+                    continue  # skip blank lines
 
-            cdc_flag, cdc_dsn, business_fields = _split_cdc(
-                fields, base_names, cdc_capable, filepath.name, line_num
-            )
-            
-            if len(business_fields) != len(base_names):
-                raise ValueError(
-                    f"{filepath.name} line {line_num}: expected {len(base_names)} "
-                    f"business columns, got {len(business_fields)}"
+                cdc_flag, cdc_dsn, business_fields = _split_cdc(
+                    fields, base_names, cdc_capable, filepath.name, line_num
                 )
 
-            values = [_safe_cast(raw, caster) for raw, caster in zip(business_fields, casters)]
-            row_hash = compute_row_hash(business_fields)
+                if len(business_fields) != len(base_names):
+                    raise ValueError(
+                        f"{filepath.name} line {line_num}: expected {len(base_names)} "
+                        f"business columns, got {len(business_fields)}"
+                    )
 
-            row = values + [batch_id, source_file, loaded_at, row_hash]
-            if cdc_capable:
-                row = [cdc_flag, cdc_dsn] + row
-            rows.append(row)
+                values = [_safe_cast(raw, caster) for raw, caster in zip(business_fields, casters)]
+                row_hash = compute_row_hash(business_fields)
 
-    if not rows:
-        return 0
+                row = values + [batch_id, source_file, loaded_at, row_hash]
+                if cdc_capable:
+                    row = [cdc_flag, cdc_dsn] + row
+                yield row
 
     staging_path = tmp_dir / f"{target_table}_{filepath.stem}_b{batch_id}.csv"
-    write_staging_csv(staging_path, rows)
+    count = write_staging_csv(staging_path, _iter_rows())
+    if count == 0:
+        return 0
     return copy_into(conn, target_table, out_columns, staging_path)
 
 
