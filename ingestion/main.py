@@ -158,7 +158,8 @@ def main():
         parser.error(f"Missing configuration for: {', '.join(missing_keys)}. Please set them in your .env file or pass them via CLI flags.")
 
     conn = get_connection(args)
-    
+    data_dir = Path(args.data_dir)
+
     # Isolated Temp Directory: Creates a unique runtime directory for intermediate CSV staging,
     # preventing concurrency collisions if multiple ingestion jobs execute in parallel.
     tmp_dir = Path(tempfile.mkdtemp(prefix=f"bronze_ingest_batch{args.batch_id}_"))
