@@ -1,33 +1,38 @@
 -- ============================================================================
--- Bronze layer DDL — brokerage-data-platform
+-- Bronze layer DDL — brokerage-data-platform (TPC-DI derived)
 -- Snowflake
 --
--- Conventions applied throughout (see docs/ADR-* for rationale):
---   - Every table carries the standard metadata envelope:
---       _batch_id     NUMBER(9,0)         -- which load batch this row came from
---       _source_file  VARCHAR
---       _loaded_at    TIMESTAMP_NTZ(3)    -- ingestion wall-clock time
---       _row_hash     NUMBER(20,0)        -- hash of business columns, for QA/dedup checks
---   - CDC-capable sources additionally carry:
---       _cdc_flag     VARCHAR(1)          -- 'I' / 'U', backfilled to 'I' for Batch1
---       _cdc_dsn      NUMBER(20,0)        -- backfilled to 0 for Batch1
---   - No manual partitioning: Snowflake micro-partitions automatically on
---     load. CLUSTER BY is deliberately NOT applied here.
---     Add it later, per table, only if query profiles show poor pruning at
---     real data volume; premature clustering keys just cost reclustering
---     credits for no benefit on tables this size.
---  - Use the defaul compute "COMPUTE_WH"
--- ===========CR=================================================================
+-- DESIGN PRINCIPLE (governs every table below):
+--   Bronze is a 1:1 mirror of the source file. If the source file carries
+--   CDC_FLAG/CDC_DSN columns, bronze carries them too -- even when, on
+--   inspection, the values turn out to be constant / non-informative (see
+--   Archetype B "quasi-CDC" note below). Bronze NEVER drops, renames-away,
+--   or infers a column the source didn't send. Any decision about how to
+--   *interpret* a column (e.g. "treat this as append-only, ignore CDC_DSN
+--   as an ordering signal") belongs in the SILVER layer, not here. This
+--   keeps bronze replayable from the original files at all times.
+--
+-- Every table carries the standard metadata envelope:
+--     _batch_id     NUMBER(9,0)         -- which load batch this row came from
+--     _source_file  VARCHAR             -- exact filename ingested
+--     _loaded_at    TIMESTAMP_NTZ(3)    -- ingestion wall-clock time
+--     _row_hash     NUMBER(20,0)        -- hash of business columns, for QA/dedup
+-- Sources whose file format includes CDC_FLAG/CDC_DSN (as columns in the
+-- file itself) additionally carry:
+--     _cdc_flag     VARCHAR(1)          -- verbatim from source; backfilled
+--                                          to 'I' only for files with NO
+--                                          CDC columns at all in Batch1
+--                                          (Trade, HoldingHistory, WatchHistory,
+--                                          DailyMarket schema-shift case)
+--     _cdc_dsn      NUMBER(20,0)        -- verbatim from source; backfilled to 0
+--
+-- No manual partitioning / CLUSTER BY at this stage (see prior ADR notes).
+-- Use the default compute warehouse "COMPUTE_WH".
+-- ============================================================================
 
 CREATE DATABASE IF NOT EXISTS brokerage_dwh;
 CREATE SCHEMA IF NOT EXISTS brokerage_dwh.bronze;
-
 USE SCHEMA brokerage_dwh.bronze;
-
--- ----------------------------------------------------------------------------
--- Staging file format + internal stage used by the ingestion loaders.
--- All loaders normalize rows into a uniform CSV shape before COPY INTO —
--- ----------------------------------------------------------------------------
 
 CREATE FILE FORMAT IF NOT EXISTS brokerage_dwh.bronze.ff_bronze_csv
     TYPE = CSV
@@ -43,30 +48,32 @@ CREATE FILE FORMAT IF NOT EXISTS brokerage_dwh.bronze.ff_bronze_csv
 CREATE STAGE IF NOT EXISTS brokerage_dwh.bronze.ingest_stage
     FILE_FORMAT = brokerage_dwh.bronze.ff_bronze_csv;
 
+
 -- ============================================================================
 -- ARCHETYPE A — Static reference dimensions (Batch1 only, load once)
+-- Behavior: one-time full load; source has no CDC columns of any kind.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS bronze_date
 (
-    SK_DateID           NUMBER(9,0),
-    DateValue           DATE,
-    DateDesc            VARCHAR,
-    CalendarYearID      NUMBER(4,0),
-    CalendarYearDesc    VARCHAR,
-    CalendarQtrID       NUMBER(6,0),
-    CalendarQtrDesc     VARCHAR,
-    CalendarMonthID     NUMBER(6,0),
-    CalendarMonthDesc   VARCHAR,
-    CalendarWeekID      NUMBER(6,0),
-    CalendarWeekDesc    VARCHAR,
-    DayOfWeekNum        NUMBER(1,0),
-    DayOfWeekDesc       VARCHAR,
-    FiscalYearID        NUMBER(4,0),
-    FiscalYearDesc      VARCHAR,
-    FiscalQtrID         NUMBER(6,0),
-    FiscalQtrDesc       VARCHAR,
-    HolidayFlag         BOOLEAN,
+    sk_dateid           NUMBER(9,0),
+    datevalue           DATE,
+    datedesc            VARCHAR(20),
+    calendaryearid      NUMBER(4,0),
+    calendaryeardesc    VARCHAR(20),
+    calendarqtrid       NUMBER(6,0),
+    calendarqtrdesc     VARCHAR(20),
+    calendarmonthid     NUMBER(6,0),
+    calendarmonthdesc   VARCHAR(20),
+    calendarweekid      NUMBER(6,0),
+    calendarweekdesc    VARCHAR(20),
+    dayofweeknum        NUMBER(1,0),
+    dayofweekdesc       VARCHAR(10),
+    fiscalyearid        NUMBER(4,0),
+    fiscalyeardesc      VARCHAR(20),
+    fiscalqtrid         NUMBER(6,0),
+    fiscalqtrdesc       VARCHAR(20),
+    holidayflag         BOOLEAN,
 
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
@@ -76,27 +83,27 @@ CREATE TABLE IF NOT EXISTS bronze_date
 
 CREATE TABLE IF NOT EXISTS bronze_time
 (
-    SK_TimeID           NUMBER(9,0),
-    TimeValue           VARCHAR,
-    HourID               NUMBER(2,0),
-    HourDesc             VARCHAR,
-    MinuteID             NUMBER(2,0),
-    MinuteDesc           VARCHAR,
-    SecondID             NUMBER(2,0),
-    SecondDesc           VARCHAR,
-    MarketHoursFlag      BOOLEAN,
-    OfficeHoursFlag      BOOLEAN,
+    sk_timeid           NUMBER(9,0),
+    timevalue           VARCHAR(20),
+    hourid              NUMBER(2,0),
+    hourdesc            VARCHAR(20),
+    minuteid            NUMBER(2,0),
+    minutedesc          VARCHAR(20),
+    secondid            NUMBER(2,0),
+    seconddesc          VARCHAR(20),
+    markethoursflag     BOOLEAN,
+    officehoursflag     BOOLEAN,
 
-    _batch_id            NUMBER(9,0),
-    _source_file         VARCHAR,
-    _loaded_at           TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash            NUMBER(20,0)
+    _batch_id           NUMBER(9,0),
+    _source_file        VARCHAR,
+    _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
+    _row_hash           NUMBER(20,0)
 );
 
 CREATE TABLE IF NOT EXISTS bronze_status_type
 (
-    ST_ID                VARCHAR(4),
-    ST_NAME              VARCHAR,
+    st_id                VARCHAR(4),
+    st_name              VARCHAR(10),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -106,9 +113,9 @@ CREATE TABLE IF NOT EXISTS bronze_status_type
 
 CREATE TABLE IF NOT EXISTS bronze_tax_rate
 (
-    TX_ID                VARCHAR(4),
-    TX_NAME              VARCHAR,
-    TX_RATE              NUMBER(6,5),
+    tx_id                VARCHAR(4),
+    tx_name              VARCHAR(50),
+    tx_rate              NUMBER(6,5),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -118,9 +125,9 @@ CREATE TABLE IF NOT EXISTS bronze_tax_rate
 
 CREATE TABLE IF NOT EXISTS bronze_industry
 (
-    IN_ID                VARCHAR(2),
-    IN_NAME              VARCHAR,
-    IN_SC_ID             VARCHAR(2),
+    in_id                VARCHAR(2),
+    in_name              VARCHAR(50),
+    in_sc_id             VARCHAR(2),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -128,12 +135,15 @@ CREATE TABLE IF NOT EXISTS bronze_industry
     _row_hash            NUMBER(20,0)
 );
 
+-- NOTE: TT_IS_SELL / TT_IS_MRKT are documented as NUM(1) flags in the spec
+-- (0/1), not a native BOOLEAN in the source file. Kept as NUMBER here to
+-- stay 1:1 with the source; casting to BOOLEAN is a silver decision.
 CREATE TABLE IF NOT EXISTS bronze_trade_type
 (
-    TT_ID                VARCHAR(3),
-    TT_NAME              VARCHAR,
-    TT_IS_SELL           BOOLEAN,
-    TT_IS_MRKT           BOOLEAN,
+    tt_id                VARCHAR(3),
+    tt_name              VARCHAR(12),
+    tt_is_sell           NUMBER(1,0),
+    tt_is_mrkt           NUMBER(1,0),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -141,29 +151,42 @@ CREATE TABLE IF NOT EXISTS bronze_trade_type
     _row_hash            NUMBER(20,0)
 );
 
--- HR is technically a fact file but is Batch1-only, static, no CDC — behaves like Archetype A
 CREATE TABLE IF NOT EXISTS bronze_hr
 (
-    EmployeeID           NUMBER(9,0),
-    ManagerID            NUMBER(9,0),
-    EmployeeFirstName    VARCHAR,
-    EmployeeLastName     VARCHAR,
-    EmployeeMI           VARCHAR(1),
-    EmployeeJobCode      NUMBER(3,0),
-    EmployeeBranch       VARCHAR,
-    EmployeeOffice       VARCHAR,
-    EmployeePhone        VARCHAR,
+    employeeid           NUMBER(9,0),
+    managerid            NUMBER(9,0),
+    employeefirstname    VARCHAR(30),
+    employeelastname     VARCHAR(30),
+    employeemi           VARCHAR(1),
+    employeejobcode      NUMBER(3,0),
+    employeebranch       VARCHAR(30),
+    employeeoffice       VARCHAR(10),
+    employeephone        VARCHAR(14),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
     _loaded_at           TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
     _row_hash            NUMBER(20,0)
 );
+
 
 -- ============================================================================
 -- ARCHETYPE B — Schema-shifting CDC facts
--- Union schema: _cdc_flag/_cdc_dsn always present, backfilled ('I', 0) for
--- Batch1 rows where the source file itself carries no CDC columns. 
+-- Behavior: Batch1 (historical) has NO CDC_FLAG/CDC_DSN columns at all --
+-- the file's field count is genuinely smaller. Batch2/3 (incremental)
+-- prepend CDC_FLAG/CDC_DSN. Bronze backfills ('I', 0) for Batch1 rows so
+-- the union schema is queryable, per source spec confirmation:
+--   "The CDC_FLAG and CDC_DSN fields are not present in the data set used
+--    by the Historical Load."
+--
+-- account / customer / trade: REAL CDC. CDC_FLAG genuinely varies I/U and reflects
+-- an actual update to an existing entity's attributes.
+--
+-- holding_history / watch_history / daily_market / cash_transaction:
+-- QUASI-CDC. The file format carries CDC_FLAG/CDC_DSN, but in the actual
+-- data CDC_FLAG is observed to be constant ('I') for all of them. 
+-- Bronze still stores these columns verbatim (1:1 principle) 
+-- the decision to treat them as append-only events (not "latest state wins") is made in SILVER, not here.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS bronze_account
@@ -171,12 +194,12 @@ CREATE TABLE IF NOT EXISTS bronze_account
     _cdc_flag            VARCHAR(1),
     _cdc_dsn             NUMBER(20,0),
 
-    CA_ID                NUMBER(19,0),
-    CA_B_ID              NUMBER(19,0),
-    CA_C_ID              NUMBER(19,0),
-    CA_NAME              VARCHAR,
-    CA_TAX_ST            NUMBER(2,0),
-    CA_ST_ID             VARCHAR(4),
+    ca_id                NUMBER(19,0),
+    ca_b_id              NUMBER(19,0),
+    ca_c_id              NUMBER(19,0),
+    ca_name              VARCHAR(50),
+    ca_tax_st            NUMBER(2,0),
+    ca_st_id             VARCHAR(4),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -189,37 +212,37 @@ CREATE TABLE IF NOT EXISTS bronze_customer
     _cdc_flag            VARCHAR(1),
     _cdc_dsn             NUMBER(20,0),
 
-    C_ID                 NUMBER(19,0),
-    C_TAX_ID             VARCHAR,
-    C_ST_ID              VARCHAR(4),
-    C_L_NAME             VARCHAR,
-    C_F_NAME             VARCHAR,
-    C_M_NAME             VARCHAR,
-    C_GNDR               VARCHAR(1),
-    C_TIER               NUMBER(1,0),
-    C_DOB                DATE,
-    C_ADLINE1            VARCHAR,
-    C_ADLINE2            VARCHAR,
-    C_ZIPCODE            VARCHAR,
-    C_CITY               VARCHAR,
-    C_STATE_PROV         VARCHAR,
-    C_CTRY               VARCHAR,
-    C_CTRY_1             VARCHAR,
-    C_AREA_1             VARCHAR,
-    C_LOCAL_1            VARCHAR,
-    C_EXT_1              VARCHAR,
-    C_CTRY_2             VARCHAR,
-    C_AREA_2             VARCHAR,
-    C_LOCAL_2            VARCHAR,
-    C_EXT_2              VARCHAR,
-    C_CTRY_3             VARCHAR,
-    C_AREA_3             VARCHAR,
-    C_LOCAL_3            VARCHAR,
-    C_EXT_3              VARCHAR,
-    C_PRIM_EMAIL         VARCHAR,
-    C_ALT_EMAIL          VARCHAR,
-    C_LCL_TX_ID          VARCHAR,
-    C_NAT_TX_ID          VARCHAR,
+    c_id                 NUMBER(19,0),
+    c_tax_id             VARCHAR(20),
+    c_st_id              VARCHAR(4),
+    c_l_name             VARCHAR(25),
+    c_f_name             VARCHAR(20),
+    c_m_name             VARCHAR(1),
+    c_gndr               VARCHAR(1),
+    c_tier               NUMBER(1,0),
+    c_dob                DATE,
+    c_adline1            VARCHAR(80),
+    c_adline2            VARCHAR(80),
+    c_zipcode            VARCHAR(12),
+    c_city               VARCHAR(25),
+    c_state_prov         VARCHAR(20),
+    c_ctry               VARCHAR(24),
+    c_ctry_1             VARCHAR(3),
+    c_area_1             VARCHAR(3),
+    c_local_1            VARCHAR(10),
+    c_ext_1              VARCHAR(5),
+    c_ctry_2             VARCHAR(3),
+    c_area_2             VARCHAR(3),
+    c_local_2            VARCHAR(10),
+    c_ext_2              VARCHAR(5),
+    c_ctry_3             VARCHAR(3),
+    c_area_3             VARCHAR(3),
+    c_local_3            VARCHAR(10),
+    c_ext_3              VARCHAR(5),
+    c_prim_email         VARCHAR(50),
+    c_alt_email          VARCHAR(50),
+    c_lcl_tx_id          VARCHAR(4),
+    c_nat_tx_id          VARCHAR(4),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -232,38 +255,36 @@ CREATE TABLE IF NOT EXISTS bronze_trade
     _cdc_flag            VARCHAR(1),
     _cdc_dsn             NUMBER(20,0),
 
-    T_ID                 NUMBER(19,0),
-    T_DTS                TIMESTAMP_NTZ,
-    T_ST_ID              VARCHAR(4),
-    T_TT_ID              VARCHAR(3),
-    T_IS_CASH            BOOLEAN,
-    T_S_SYMB             VARCHAR(15),
-    T_QTY                NUMBER(9,0),
-    T_BID_PRICE          NUMBER(12,2),
-    T_CA_ID              NUMBER(19,0),
-    T_EXEC_NAME          VARCHAR,
-    T_TRADE_PRICE        NUMBER(12,2),
-    T_CHRG               NUMBER(12,2),
-    T_COMM               NUMBER(12,2),
-    T_TAX                NUMBER(12,2),
+    t_id                 NUMBER(19,0),
+    t_dts                TIMESTAMP_NTZ,
+    t_st_id              VARCHAR(4),
+    t_tt_id              VARCHAR(3),
+    t_is_cash            BOOLEAN,
+    t_s_symb             VARCHAR(15),
+    t_qty                NUMBER(9,0),
+    t_bid_price          NUMBER(12,2),
+    t_ca_id              NUMBER(19,0),
+    t_exec_name          VARCHAR(50),
+    t_trade_price        NUMBER(12,2),
+    t_chrg               NUMBER(12,2),
+    t_comm               NUMBER(12,2),
+    t_tax                NUMBER(12,2),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
     _loaded_at           TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
     _row_hash            NUMBER(20,0)
 );
--- At scale, consider: ALTER TABLE bronze_trade CLUSTER BY (_batch_id); only
--- once table size and query profile justify it.
 
 CREATE TABLE IF NOT EXISTS bronze_holding_history
 (
     _cdc_flag            VARCHAR(1),
     _cdc_dsn             NUMBER(20,0),
 
-    HH_H_T_ID            NUMBER(19,0),
-    HH_T_ID              NUMBER(19,0),
-    HH_BEFORE_QTY        NUMBER(9,0),
-    HH_AFTER_QTY         NUMBER(9,0),
+    hh_h_t_id            NUMBER(19,0),
+    hh_t_id              NUMBER(19,0),
+    hh_before_qty        NUMBER(9,0),
+    hh_after_qty         NUMBER(9,0),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -271,18 +292,15 @@ CREATE TABLE IF NOT EXISTS bronze_holding_history
     _row_hash            NUMBER(20,0)
 );
 
--- WatchHistory: CDC_FLAG is always 'I' per spec (rows only added, never
--- updated/deleted). _cdc_dsn kept for lineage/ordering even though every
--- row is an insert.
 CREATE TABLE IF NOT EXISTS bronze_watch_history
 (
     _cdc_flag            VARCHAR(1),
     _cdc_dsn             NUMBER(20,0),
 
-    W_C_ID               NUMBER(19,0),
-    W_S_SYMB             VARCHAR(15),
-    W_DTS                TIMESTAMP_NTZ,
-    W_ACTION             VARCHAR(4),
+    w_c_id               NUMBER(19,0),
+    w_s_symb             VARCHAR(15),
+    w_dts                TIMESTAMP_NTZ,
+    w_action             VARCHAR(4),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -295,12 +313,12 @@ CREATE TABLE IF NOT EXISTS bronze_daily_market
     _cdc_flag            VARCHAR(1),
     _cdc_dsn             NUMBER(20,0),
 
-    DM_DATE              DATE,
-    DM_S_SYMB            VARCHAR(15),
-    DM_CLOSE             FLOAT,
-    DM_HIGH              FLOAT,
-    DM_LOW               FLOAT,
-    DM_VOL               NUMBER(19,0),
+    dm_date              DATE,
+    dm_s_symb            VARCHAR(15),
+    dm_close             FLOAT,
+    dm_high              FLOAT,
+    dm_low               FLOAT,
+    dm_vol               NUMBER(19,0),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -308,18 +326,16 @@ CREATE TABLE IF NOT EXISTS bronze_daily_market
     _row_hash            NUMBER(20,0)
 );
 
--- CashTransaction: CDC presence NOT confirmed against spec (see sources.md
--- note). CDC fields left nullable; _row_hash is the fallback QA/lineage
--- signal if _cdc_dsn turns out to be unreliable or absent.
+
 CREATE TABLE IF NOT EXISTS bronze_cash_transaction
 (
     _cdc_flag            VARCHAR(1),
     _cdc_dsn             NUMBER(20,0),
 
-    CT_CA_ID             NUMBER(19,0),
-    CT_DTS               TIMESTAMP_NTZ,
-    CT_AMT               NUMBER(15,2),
-    CT_NAME              VARCHAR,
+    ct_ca_id             NUMBER(19,0),
+    ct_dts               TIMESTAMP_NTZ,
+    ct_amt               NUMBER(15,2),
+    ct_name              VARCHAR(100),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -327,34 +343,36 @@ CREATE TABLE IF NOT EXISTS bronze_cash_transaction
     _row_hash            NUMBER(20,0)
 );
 
+
 -- ============================================================================
--- ARCHETYPE C — Full re-extract snapshot (no CDC; every batch is a complete dump)
+-- ARCHETYPE C — Full re-extract snapshot (no CDC; every batch is a
+-- complete dump of the entire entity, not a delta)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS bronze_prospect
 (
-    AgencyID             VARCHAR,
-    LastName             VARCHAR,
-    FirstName            VARCHAR,
-    MiddleInitial        VARCHAR(1),
-    Gender               VARCHAR(1),
-    AddressLine1         VARCHAR,
-    AddressLine2         VARCHAR,
-    PostalCode           VARCHAR,
-    City                 VARCHAR,
-    State                VARCHAR,
-    Country              VARCHAR,
-    Phone                VARCHAR,
-    Income               NUMBER(9,0),
-    NumberCars           NUMBER(2,0),
-    NumberChildren       NUMBER(2,0),
-    MaritalStatus        VARCHAR(1),
-    Age                  NUMBER(3,0),
-    CreditRating         NUMBER(4,0),
-    OwnOrRentFlag        VARCHAR(1),
-    Employer             VARCHAR,
-    NumberCreditCards    NUMBER(2,0),
-    NetWorth             NUMBER(12,0),
+    agencyid             VARCHAR(30),
+    lastname             VARCHAR(30),
+    firstname            VARCHAR(30),
+    middleinitial        VARCHAR(1),
+    gender               VARCHAR(1),
+    addressline1         VARCHAR(80),
+    addressline2         VARCHAR(80),
+    postalcode           VARCHAR(12),
+    city                 VARCHAR(25),
+    state                VARCHAR(20),
+    country              VARCHAR(24),
+    phone                VARCHAR(30),
+    income               NUMBER(9,0),
+    numbercars           NUMBER(2,0),
+    numberchildren       NUMBER(2,0),
+    maritalstatus        VARCHAR(1),
+    age                  NUMBER(3,0),
+    creditrating         NUMBER(4,0),
+    ownorrentflag        VARCHAR(1),
+    employer             VARCHAR(30),
+    numbercreditcards    NUMBER(2,0),
+    networth             NUMBER(12,0),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -362,27 +380,37 @@ CREATE TABLE IF NOT EXISTS bronze_prospect
     _row_hash            NUMBER(20,0)
 );
 
+
 -- ============================================================================
--- ARCHETYPE D — Parsed structural sources (FINWIRE, CustomerMgmt.xml)
+-- ARCHETYPE D — Parsed structural sources (FINWIRE fixed-width, CustomerMgmt.xml)
+-- Behavior: no CDC columns in the raw file at all. FINWIRE is Batch1-only,
+-- append-only-by-PTS. CustomerMgmt.xml is Batch1 (Historical Load) only,
+-- and its ActionType attribute carries richer state-transition information
+-- (NEW/ADDACCT/UPDCUST/UPDACCT/CLOSEACCT/INACT) than the simple I/U used
+-- by Account.txt/Customer.txt from Batch2/3 onward. Bronze keeps ActionType
+-- verbatim as its own column; unifying it with Account.txt/Customer.txt's
+-- CDC_FLAG vocabulary is a SILVER decision, not a bronze one -- the two
+-- vocabularies are not a 1:1 mapping (see docs/silver_customer_account_unification.md
+-- for the open questions on CLOSEACCT/INACT status inference).
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS bronze_finwire_cmp
 (
-    PTS                  TIMESTAMP_NTZ,
-    CompanyName          VARCHAR,
-    CIK                  VARCHAR,
-    Status               VARCHAR(4),
-    IndustryID           VARCHAR(2),
-    SPrating             VARCHAR(4),
-    FoundingDate         DATE,
-    AddrLine1            VARCHAR,
-    AddrLine2            VARCHAR,
-    PostalCode           VARCHAR,
-    City                 VARCHAR,
-    StateProvince        VARCHAR,
-    Country              VARCHAR,
-    CEOname              VARCHAR,
-    Description          VARCHAR,
+    pts                  TIMESTAMP_NTZ,
+    companyname          VARCHAR(60),
+    cik                  VARCHAR(10),
+    status               VARCHAR(4),
+    industryid           VARCHAR(2),
+    sprating             VARCHAR(4),
+    foundingdate         DATE,
+    addrline1            VARCHAR(80),
+    addrline2            VARCHAR(80),
+    postalcode           VARCHAR(12),
+    city                 VARCHAR(25),
+    stateprovince        VARCHAR(20),
+    country              VARCHAR(24),
+    ceoname              VARCHAR(46),
+    description          VARCHAR(150),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -392,20 +420,20 @@ CREATE TABLE IF NOT EXISTS bronze_finwire_cmp
 
 CREATE TABLE IF NOT EXISTS bronze_finwire_sec
 (
-    PTS                  TIMESTAMP_NTZ,
-    Symbol               VARCHAR(15),
-    IssueType            VARCHAR(6),
-    Status               VARCHAR(4),
-    Name                 VARCHAR,
-    ExID                 VARCHAR(6),
-    ShOut                NUMBER(19,0),
-    FirstTradeDate       DATE,
-    FirstTradeExchg      DATE,
-    Dividend             NUMBER(12,2),
+    pts                  TIMESTAMP_NTZ,
+    symbol               VARCHAR(15),
+    issuetype            VARCHAR(6),
+    status               VARCHAR(4),
+    name                 VARCHAR(70),
+    exid                 VARCHAR(6),
+    shout                NUMBER(19,0),
+    firsttradedate       DATE,
+    firsttradeexchg      DATE,
+    dividend             NUMBER(12,2),
     -- CoNameOrCIK resolved at parse time into two explicit, mutually
-    -- exclusive columns instead of carrying the polymorphic raw field.
-    CoName               VARCHAR,
-    CoCIK                VARCHAR,
+    -- exclusive columns instead of carrying the raw polymorphic field.
+    coname               VARCHAR(60),
+    cocik                VARCHAR(10),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -415,23 +443,23 @@ CREATE TABLE IF NOT EXISTS bronze_finwire_sec
 
 CREATE TABLE IF NOT EXISTS bronze_finwire_fin
 (
-    PTS                  TIMESTAMP_NTZ,
-    Year                 NUMBER(4,0),
-    Quarter              NUMBER(1,0),
-    QtrStartDate         DATE,
-    PostingDate          DATE,
-    Revenue              NUMBER(20,2),
-    Earnings             NUMBER(20,2),
-    EPS                  NUMBER(10,4),
-    DilutedEPS           NUMBER(10,4),
-    Margin               NUMBER(10,4),
-    Inventory            NUMBER(20,2),
-    Assets               NUMBER(20,2),
-    Liabilities          NUMBER(20,2),
-    ShOut                NUMBER(19,0),
-    DilutedShOut         NUMBER(19,0),
-    CoName               VARCHAR,
-    CoCIK                VARCHAR,
+    pts                  TIMESTAMP_NTZ,
+    year                 NUMBER(4,0),
+    quarter              NUMBER(1,0),
+    qtrstartdate         DATE,
+    postingdate          DATE,
+    revenue              NUMBER(20,2),
+    earnings             NUMBER(20,2),
+    eps                  NUMBER(10,4),
+    dilutedeps           NUMBER(10,4),
+    margin               NUMBER(10,4),
+    inventory            NUMBER(20,2),
+    assets               NUMBER(20,2),
+    liabilities          NUMBER(20,2),
+    shout                NUMBER(19,0),
+    dilutedshout         NUMBER(19,0),
+    coname               VARCHAR(60),
+    cocik                VARCHAR(10),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -439,17 +467,34 @@ CREATE TABLE IF NOT EXISTS bronze_finwire_fin
     _row_hash            NUMBER(20,0)
 );
 
-CREATE TABLE IF NOT EXISTS bronze_customer_mgmt_event
+-- bronze_mgmt_customer: flattened from CustomerMgmt.xml <Action>/<Customer>.
+-- One row per Action that has a Customer element (i.e. every action type).
+-- Per spec, UPDCUST sends only C_ID plus the fields that changed -- all
+-- other columns are NULL on that row (sparse payload). Reconciling that
+-- sparseness into a "current full record" (e.g. via COALESCE/carry-forward)
+-- is explicitly a SILVER responsibility, not bronze's.
+CREATE TABLE IF NOT EXISTS bronze_mgmt_customer
 (
-    ActionType           VARCHAR(10),
-    ActionTS             TIMESTAMP_NTZ,
-    C_ID                 NUMBER(19,0),
-    C_TAX_ID             VARCHAR,
-    C_GNDR               VARCHAR(1),
-    C_TIER               NUMBER(1,0),
-    C_DOB                DATE,
-    C_LCL_TX_ID          VARCHAR,
-    C_NAT_TX_ID          VARCHAR,
+    actiontype           VARCHAR(9),
+    actionts             TIMESTAMP_NTZ,
+    c_id                 NUMBER(19,0),
+    c_tax_id             VARCHAR(20),
+    c_gndr               VARCHAR(1),
+    c_tier               NUMBER(1,0),
+    c_dob                DATE,
+    c_l_name             VARCHAR(25),
+    c_f_name             VARCHAR(20),
+    c_m_name             VARCHAR(1),
+    c_adline1            VARCHAR(80),
+    c_adline2            VARCHAR(80),
+    c_zipcode            VARCHAR(12),
+    c_city               VARCHAR(25),
+    c_state_prov         VARCHAR(20),
+    c_ctry               VARCHAR(24),
+    c_prim_email         VARCHAR(50),
+    c_alt_email          VARCHAR(50),
+    c_lcl_tx_id          VARCHAR(4),
+    c_nat_tx_id          VARCHAR(4),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -457,14 +502,22 @@ CREATE TABLE IF NOT EXISTS bronze_customer_mgmt_event
     _row_hash            NUMBER(20,0)
 );
 
-CREATE TABLE IF NOT EXISTS bronze_customer_mgmt_account
+-- bronze_mgmt_account: flattened from CustomerMgmt.xml <Action>/<Customer>/<Account>.
+-- One row per Account element nested inside an Action (zero or more per
+-- Action -- NEW/ADDACCT can carry several accounts in one Action). CA_ID is
+-- required on NEW/ADDACCT/UPDACCT/CLOSEACCT; CLOSEACCT/INACT actions carry
+-- only identifiers with no attribute payload (see docs note on status
+-- inference -- CLOSEACCT/INACT status is NOT present in source data at all,
+-- it must be derived downstream from ActionType itself).
+CREATE TABLE IF NOT EXISTS bronze_mgmt_account
 (
-    ActionTS             TIMESTAMP_NTZ,
-    C_ID                 NUMBER(19,0),
-    CA_ID                NUMBER(19,0),
-    CA_TAX_ST            NUMBER(2,0),
-    CA_B_ID              NUMBER(19,0),
-    CA_NAME              VARCHAR,
+    actiontype           VARCHAR(9),
+    actionts             TIMESTAMP_NTZ,
+    c_id                 NUMBER(19,0),
+    ca_id                NUMBER(19,0),
+    ca_tax_st            NUMBER(2,0),
+    ca_b_id              NUMBER(19,0),
+    ca_name              VARCHAR(50),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -472,12 +525,20 @@ CREATE TABLE IF NOT EXISTS bronze_customer_mgmt_account
     _row_hash            NUMBER(20,0)
 );
 
--- TradeHistory: Historical Load only, per spec — no incremental counterpart.
+
+-- ============================================================================
+-- ARCHETYPE E — Historical-load-only fact 
+-- Behavior: loads once, in Batch1 only, like Archetype A -- but unlike A,
+-- this is trade-lifecycle FACT data (linked to bronze_trade via T_ID), not
+-- static reference/dimension data. No Batch2/3 counterpart exists at all
+-- per spec: "This file is used only in the Historical Load."
+-- ============================================================================
+
 CREATE TABLE IF NOT EXISTS bronze_trade_history
 (
-    TH_T_ID              NUMBER(19,0),
-    TH_DTS               TIMESTAMP_NTZ,
-    TH_ST_ID             VARCHAR(4),
+    th_t_id              NUMBER(19,0),
+    th_dts               TIMESTAMP_NTZ,
+    th_st_id             VARCHAR(4),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,
@@ -485,29 +546,30 @@ CREATE TABLE IF NOT EXISTS bronze_trade_history
     _row_hash            NUMBER(20,0)
 );
 
+
 -- ============================================================================
--- Operational / control tables
+-- Operational / Control tables — NOT business data, NOT classified under
+-- A/B/C/D/E. These describe the pipeline's own execution (what batch ran,
+-- what date it represents, vendor-supplied reconciliation counts). Loaded
+-- every batch, but via merge/upsert-style logic since each is keyed and
+-- small, not full-refresh or CDC in the business-data sense.
 -- ============================================================================
 
--- One row per batch, recording the vendor-supplied as-of date from
--- BatchDate.txt. Ingestion-metadata, not business data.
 CREATE TABLE IF NOT EXISTS bronze_batch_control
 (
-    BatchID              NUMBER(9,0),
-    AsOfDate             DATE,
+    batchid              NUMBER(9,0),
+    asofdate             DATE,
     _loaded_at           TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3)
 );
 
--- Reconciliation ground truth, sourced from *_audit.csv per component/batch.
--- Used to validate bronze row counts against vendor-reported counts.
 CREATE TABLE IF NOT EXISTS bronze_source_audit
 (
-    DataSet              VARCHAR,
-    BatchID              NUMBER(9,0),
-    Date                 DATE,
-    Attribute            VARCHAR,
-    Value                NUMBER(19,0),
-    DValue               NUMBER(20,5),
+    dataset              VARCHAR(20),
+    batchid              NUMBER(5,0),
+    date                 DATE,
+    attribute            VARCHAR(50),
+    value                NUMBER(15,0),
+    dvalue               NUMBER(20,5),
 
     _batch_id            NUMBER(9,0),
     _source_file         VARCHAR,

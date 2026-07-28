@@ -1,5 +1,4 @@
-# Source Data Dictionary — sources.md
-## brokerage-data-platform
+# Source Data Dictionary
 
 Grounded directly against TPC Benchmark™ DI Standard Specification, Revision
 1.1.0 (sections 2.2.2.x). Where a file's exact layout was **not** present in
@@ -7,8 +6,8 @@ the spec excerpt available, this is marked explicitly — those entries carry
 forward from a previously verified real sample, not from the spec text
 itself.
 
-
-![./images/erd_sources.jpg](./images/erd_sources.jpg).
+> [!NOTE]
+> The system considers some tables as having CDC columns, but the spec does not explicitly mention them. In those cases, the table is marked as "quasi-CDC" in the bronze design document.
 
 ## Batch Scope Matrix
 
@@ -223,7 +222,11 @@ RecType prefix at the start of every record.
 | CEOname | 46 | |
 | Description | 150 | |
 
+**Row example:** \  
+`20150930-105809CMPwXNVgHqwrsTCfxfjjbKr                                        0000001055ACTVPRAA- 1868100922506 Shelter Drive                                                                                                                                             98127       Halifax                  Manitoba            United States of AmericaAita                                          PDAzlWXAmHTFclLeP`
+
 ### SEC records (security)
+
 | Field | Width | Description |
 |---|---|---|
 | PTS | 15 | |
@@ -239,6 +242,8 @@ RecType prefix at the start of every record.
 | Dividend | 12 | |
 | CoNameOrCIK | 60 or 10 | Company name (if not all-digits) or CIK (if all-digits) |
 
+**Row example (real, FINWIRE2015Q4):**\
+`20150930-202539SECAAAAAAAAAAAABBECOMMONINACWDIFfR WnDkmezLhGQQbIUoIpgOKOSTF J                                    NASDAQ650294685    1912031519320701        2.820000000173`
 ### FIN records (quarterly financials)
 | Field | Width | Description |
 |---|---|---|
@@ -259,6 +264,9 @@ RecType prefix at the start of every record.
 | ShOut | 13 | |
 | DilutedShOut | 13 | |
 | CoNameOrCIK | 60 or 10 | |
+
+**Row example (real, FINWIRE2015Q4):**\
+`20150920-021927FIN201532015070120150920    1041315574.26     213823992.69        0.97        0.88        0.21     519264147.52  813470188161.17    5875685170.79    221418113    2429933470000000970`
 
 **Note:** all fields are space-padded — text left-justified, numeric
 right-justified; CIK values are zero-padded on the left.
@@ -350,12 +358,7 @@ Incremental version prepends `CDC_FLAG`/`CDC_DSN` to the same 4 fields.
 
 
 
-## 11. Prospect.csv
-*(See entry 5 above — same file, listed once.)*
-
-
-
-## 12. StatusType.txt
+## 11. StatusType.txt
 **Format:** Pipe-delimited\
 **Scope:** Batch1 only
 
@@ -369,7 +372,7 @@ Incremental version prepends `CDC_FLAG`/`CDC_DSN` to the same 4 fields.
 
 
 
-## 13. TaxRate.txt
+## 12. TaxRate.txt
 **Format:** Pipe-delimited\
 **Scope:** Batch1 only
 
@@ -384,7 +387,7 @@ Incremental version prepends `CDC_FLAG`/`CDC_DSN` to the same 4 fields.
 
 
 
-## 14. Time.txt — **fully expanded, was previously just "10 columns"**
+## 13. Time.txt — 
 **Format:** Pipe-delimited, ordered by SK_TimeID\
 **Scope:** Batch1 only
 
@@ -406,7 +409,7 @@ Incremental version prepends `CDC_FLAG`/`CDC_DSN` to the same 4 fields.
 
 
 
-## 15. TradeType.txt — **corrected: was missing 2 columns**
+## 14. TradeType.txt 
 **Format:** Pipe-delimited\
 **Scope:** Batch1 only
 
@@ -424,7 +427,7 @@ Incremental version prepends `CDC_FLAG`/`CDC_DSN` to the same 4 fields.
 
 
 
-## 16. WatchHistory.txt
+## 15. WatchHistory.txt
 **Format:** Pipe-delimited\
 **Scope:** Batch1 (Historical, no CDC — ordered by W_DTS) and Batch2/3
 (Incremental, with CDC — ordered by CDC_DSN). Note per spec: `CDC_FLAG`
@@ -442,7 +445,7 @@ value is always `'I'` here — *"Rows are only added"*, no updates/deletes.
 
 
 
-## 17. DailyMarket.txt — **corrected: was missing the CDC distinction**
+## 16. DailyMarket.txt 
 **Format:** Pipe-delimited\
 **Scope:** Batch1 (Historical, no CDC) and Batch2/3 (Incremental, with CDC
 — `CDC_FLAG` always `'I'`, ordered by CDC_DSN)
@@ -461,7 +464,7 @@ value is always `'I'` here — *"Rows are only added"*, no updates/deletes.
 
 
 
-## 18. CashTransaction.txt
+## 17. CashTransaction.txt
 **Format:** Pipe-delimited\
 **Scope:** Batch1 & Batch2/3\
 **Note:** Not present in the spec excerpt reviewed for this update — kept
@@ -482,7 +485,7 @@ official spec text until you can check the relevant section directly.
 
 
 
-## 19. Date.txt
+## 18. Date.txt
 **Format:** Pipe-delimited, ordered by SK_DateID\
 **Scope:** Batch1 only
 
@@ -512,7 +515,7 @@ official spec text until you can check the relevant section directly.
 
 
 
-## 20. BatchDate.txt
+## 19. BatchDate.txt
 **Format:** Plain text, single value\
 **Scope:** All batches — one control file per batch stating its as-of date
 
@@ -523,7 +526,7 @@ official spec text until you can check the relevant section directly.
 
 ---
 
-## 21. Audit files (`*_audit.csv`) — 
+## 20. Audit files (`*_audit.csv`) — 
 **Format:** CSV, first record contains field names\
 **Scope:** Generated per component, per batch
 
