@@ -76,6 +76,12 @@ def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path) -> dict:
     batch_dir = data_dir / f"Batch{batch_id}"
     if not batch_dir.exists():
         raise FileNotFoundError(f"No directory found for batch {batch_id}: {batch_dir}")
+    
+    query = f"SELECT COUNT(*) FROM bronze_batch_control WHERE batch_id = {batch_id}"
+    with conn.cursor() as cur:
+        cur.execute(query)
+        if cur.fetchone()[0] > 0:
+            raise RuntimeError(f"Batch {batch_id} has already been ingested; aborting to prevent duplicate data.")
 
     summary = {}
 

@@ -23,58 +23,58 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..common import _safe_cast, compute_row_hash, parse_yyyymmdd, StreamingCsvWriter
+from ..common import _safe_cast, compute_row_hash, parse_yyyymmdd, parse_decimal, StreamingCsvWriter
 from ..snowflake_client import copy_into
 
 # Fixed-width offset constants (Characters)
 PTS_WIDTH = 15
 RECTYPE_WIDTH = 3
 
-# Field definitions: (Field_Name, Width_In_Chars, Caster_Function)
+# Field definitions: (column_name, width_in_chars, caster_function) — names match bronze DDL
 CMP_FIELDS = [
-    ("CompanyName", 60, str),
-    ("CIK", 10, str),
-    ("Status", 4, str),
-    ("IndustryID", 2, str),
-    ("SPrating", 4, str),
-    ("FoundingDate", 8, parse_yyyymmdd),
-    ("AddrLine1", 80, str),
-    ("AddrLine2", 80, str),
-    ("PostalCode", 12, str),
-    ("City", 25, str),
-    ("StateProvince", 20, str),
-    ("Country", 24, str),
-    ("CEOname", 46, str),
-    ("Description", 150, str),
+    ("companyname", 60, str),
+    ("cik", 10, str),
+    ("status", 4, str),
+    ("industryid", 2, str),
+    ("sprating", 4, str),
+    ("foundingdate", 8, parse_yyyymmdd),
+    ("addrline1", 80, str),
+    ("addrline2", 80, str),
+    ("postalcode", 12, str),
+    ("city", 25, str),
+    ("stateprovince", 20, str),
+    ("country", 24, str),
+    ("ceoname", 46, str),
+    ("description", 150, str),
 ]
 
 SEC_FIELDS = [
-    ("Symbol", 15, str),
-    ("IssueType", 6, str),
-    ("Status", 4, str),
-    ("Name", 70, str),
-    ("ExID", 6, str),
-    ("ShOut", 13, lambda v: _safe_cast(v, int)),
-    ("FirstTradeDate", 8, parse_yyyymmdd),
-    ("FirstTradeExchg", 8, parse_yyyymmdd),
-    ("Dividend", 12, Decimal),
+    ("symbol", 15, str),
+    ("issuetype", 6, str),
+    ("status", 4, str),
+    ("name", 70, str),
+    ("exid", 6, str),
+    ("shout", 13, lambda v: _safe_cast(v, int)),
+    ("firsttradedate", 8, parse_yyyymmdd),
+    ("firsttradeexchg", 8, parse_yyyymmdd),
+    ("dividend", 12, parse_decimal),
 ]
 
 FIN_FIELDS = [
-    ("Year", 4, lambda v: _safe_cast(v, int)),
-    ("Quarter", 1, lambda v: _safe_cast(v, int)),
-    ("QtrStartDate", 8, parse_yyyymmdd),
-    ("PostingDate", 8, parse_yyyymmdd),
-    ("Revenue", 17, Decimal),
-    ("Earnings", 17, Decimal),
-    ("EPS", 12, Decimal),
-    ("DilutedEPS", 12, Decimal),
-    ("Margin", 12, Decimal),
-    ("Inventory", 17, Decimal),
-    ("Assets", 17, Decimal),
-    ("Liabilities", 17, Decimal),
-    ("ShOut", 13, lambda v: _safe_cast(v, int)),
-    ("DilutedShOut", 13, lambda v: _safe_cast(v, int)),
+    ("year", 4, lambda v: _safe_cast(v, int)),
+    ("quarter", 1, lambda v: _safe_cast(v, int)),
+    ("qtrstartdate", 8, parse_yyyymmdd),
+    ("postingdate", 8, parse_yyyymmdd),
+    ("revenue", 17, parse_decimal),
+    ("earnings", 17, parse_decimal),
+    ("eps", 12, parse_decimal),
+    ("dilutedeps", 12, parse_decimal),
+    ("margin", 12, parse_decimal),
+    ("inventory", 17, parse_decimal),
+    ("assets", 17, parse_decimal),
+    ("liabilities", 17, parse_decimal),
+    ("shout", 13, lambda v: _safe_cast(v, int)),
+    ("dilutedshout", 13, lambda v: _safe_cast(v, int)),
 ]
 
 
@@ -202,16 +202,16 @@ def load_finwire_source(conn: Any, filepath: Path, batch_id: int, tmp_dir: Path)
 
     # Bulk Ingestion Phase: Execute COPY INTO for populated staging target files
     if cmp_w.count:
-        cols = ["PTS"] + [f[0] for f in CMP_FIELDS] + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"]
+        cols = ["pts"] + [f[0] for f in CMP_FIELDS] + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"]
         total_loaded += copy_into(conn, "bronze_finwire_cmp", cols, cmp_path)
 
     if sec_w.count:
-        cols = (["PTS"] + [f[0] for f in SEC_FIELDS] + ["CoName", "CoCIK"]
+        cols = (["pts"] + [f[0] for f in SEC_FIELDS] + ["coname", "cocik"]
                 + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"])
         total_loaded += copy_into(conn, "bronze_finwire_sec", cols, sec_path)
 
     if fin_w.count:
-        cols = (["PTS"] + [f[0] for f in FIN_FIELDS] + ["CoName", "CoCIK"]
+        cols = (["pts"] + [f[0] for f in FIN_FIELDS] + ["coname", "cocik"]
                 + ["_batch_id", "_source_file", "_loaded_at", "_row_hash"])
         total_loaded += copy_into(conn, "bronze_finwire_fin", cols, fin_path)
 

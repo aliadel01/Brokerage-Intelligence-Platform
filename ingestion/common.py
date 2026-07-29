@@ -36,6 +36,7 @@ def compute_row_hash(values: Sequence[Any]) -> int:
 parse_date = lambda v: datetime.strptime(v, "%Y-%m-%d").date()
 parse_datetime = lambda v: datetime.strptime(v, "%Y-%m-%d %H:%M:%S")
 parse_bool = lambda v: v in ("1", "true", "True", "Y", "y")
+parse_decimal = lambda v: Decimal(v).normalize()
 
 # Edge Case Handling: TPC-DI and legacy batch files often represent empty or default dates as '00000000'.
 parse_yyyymmdd = lambda v: None if set(v) == {"0"} else datetime.strptime(v, "%Y%m%d").date()

@@ -47,8 +47,8 @@ def load_audit_source(conn, filepath: Path, batch_id: int, tmp_dir: Path) -> int
                 ]
 
     # Explicit Target Columns Mapping: Defines exact column ordering matching the target table DDL to prevent COPY INTO positioning errors.
-    cols = ["DataSet", "BatchID", "Date", "Attribute", "Value", "DValue",
-            "_batch_id", "_source_file", "_loaded_at"]
+    cols = ["dataset", "batchid", "date", "attribute", "value", "dvalue",
+        "_batch_id", "_source_file", "_loaded_at"]
     path = tmp_dir / f"audit_{filepath.stem}_b{batch_id}.csv"
     
     # Execution Guard: Checks row count before invoking database operations to save unnecessary Snowflake staging/PUT queries for empty audit files.
@@ -69,7 +69,7 @@ def load_batch_date(conn, filepath: Path, batch_id: int, tmp_dir: Path) -> int:
     as_of_date = datetime.strptime(as_of_date_raw, "%Y-%m-%d").date()
 
     # Control Table Standard: Isolates batch processing context metadata to drive downstream Silver layer incremental transformations.
-    cols = ["BatchID", "AsOfDate", "_loaded_at"]
+    cols = ["batchid", "asofdate", "_loaded_at"]
     rows = [[batch_id, as_of_date, datetime.now(timezone.utc)]]
     path = tmp_dir / f"batch_control_b{batch_id}.csv"
     

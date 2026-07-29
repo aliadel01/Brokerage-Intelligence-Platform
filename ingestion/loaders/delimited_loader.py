@@ -69,7 +69,7 @@ def load_delimited_source(conn, config: dict, filepath: Path, batch_id: int, tmp
                 # 1. Cast raw string fields safely using type-specific converters.
                 # 2. Compute BLAKE2b hash across original raw business fields to capture state for future CDC comparisons.
                 values = [_safe_cast(raw, caster) for raw, caster in zip(business_fields, casters)]
-                row_hash = compute_row_hash(business_fields)
+                row_hash = compute_row_hash(values)
 
                 row = values + [batch_id, source_file, loaded_at, row_hash]
                 if cdc_capable:
