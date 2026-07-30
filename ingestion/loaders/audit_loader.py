@@ -36,7 +36,6 @@ def load_audit_source(conn, filepath: Path, batch_id: int, tmp_dir: Path) -> int
             for record in reader:
                 yield [
                     _safe_cast(record.get("DataSet"), str),
-                    _safe_cast(record.get("BatchID"), int),
                     _safe_cast(record.get("Date"), lambda d: datetime.strptime(d, "%Y-%m-%d").date()),
                     _safe_cast(record.get("Attribute"), str),
                     _safe_cast(record.get("Value"), int),
@@ -47,7 +46,7 @@ def load_audit_source(conn, filepath: Path, batch_id: int, tmp_dir: Path) -> int
                 ]
 
     # Explicit Target Columns Mapping: Defines exact column ordering matching the target table DDL to prevent COPY INTO positioning errors.
-    cols = ["dataset", "batchid", "date", "attribute", "value", "dvalue",
+    cols = ["dataset", "date", "attribute", "value", "dvalue",
         "_batch_id", "_source_file", "_loaded_at"]
     path = tmp_dir / f"audit_{filepath.stem}_b{batch_id}.csv"
     
@@ -69,7 +68,7 @@ def load_batch_date(conn, filepath: Path, batch_id: int, tmp_dir: Path) -> int:
     as_of_date = datetime.strptime(as_of_date_raw, "%Y-%m-%d").date()
 
     # Control Table Standard: Isolates batch processing context metadata to drive downstream Silver layer incremental transformations.
-    cols = ["batchid", "asofdate", "_loaded_at"]
+    cols = ["_batch_id", "asofdate", "_loaded_at"]
     rows = [[batch_id, as_of_date, datetime.now(timezone.utc)]]
     path = tmp_dir / f"batch_control_b{batch_id}.csv"
     

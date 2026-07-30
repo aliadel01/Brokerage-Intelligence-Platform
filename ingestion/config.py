@@ -300,3 +300,22 @@ DELIMITED_SOURCES = {
         ],
     },
 }
+
+ALL_BRONZE_TABLES = [
+    # Archetype A — static reference
+    "bronze_date", "bronze_time", "bronze_status_type", "bronze_tax_rate",
+    "bronze_industry", "bronze_trade_type", "bronze_hr",
+    # Archetype B — CDC facts
+    "bronze_account", "bronze_customer", "bronze_trade",
+    "bronze_holding_history", "bronze_watch_history",
+    "bronze_daily_market", "bronze_cash_transaction",
+    # Archetype C — full re-extract
+    "bronze_prospect",
+    # Archetype D — parsed structural
+    "bronze_finwire_cmp", "bronze_finwire_sec", "bronze_finwire_fin",
+    "bronze_mgmt_customer", "bronze_mgmt_account",
+    # Archetype E — historical-only
+    "bronze_trade_history",
+    # Operational / control
+    "bronze_batch_control", "bronze_source_audit",
+]

@@ -48,6 +48,7 @@ cleaned up at the end of each run.
 
 Usage:
     python -m ingestion.main --batch-id 1
+    python -m ingestion.main --batch-id 1 --force   # wipe + re-ingest an existing batch
 
 Run once per batch, in order (1, then 2, then 3, ...) — _cdc_dsn versioning
 assumes monotonically increasing sequence numbers across batches.
@@ -59,7 +60,7 @@ from pathlib import Path
 from os import getenv
 from dotenv import load_dotenv
 
-from .config import DELIMITED_SOURCES
+from .config import DELIMITED_SOURCES, ALL_BRONZE_TABLES
 from .snowflake_client import get_connection
 from .loaders.delimited_loader import load_delimited_source
 from .loaders.finwire_loader import load_finwire_source
@@ -69,28 +70,104 @@ from .loaders.audit_loader import load_audit_source, load_batch_date
 # Load environment variables early so CLI defaults can fall back to .env values cleanly.
 load_dotenv()
 
-def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path) -> dict:
+
+def force_delete_batch(conn, batch_id: int) -> None:
+    """Delete all rows for this batch_id across every bronze table.
+
+    Used only when --force is passed and the batch already exists —
+    lets you wipe a partially-loaded or already-completed batch and
+    re-run it cleanly from scratch. [decision: full wipe of all bronze
+    tables incl. business data, not just the control tables — user's
+    call, driven by storage cost, since business tables are already
+    protected downstream by silver's dedup_latest/_row_hash]
+    """
+    with conn.cursor() as cur:
+        # Wrapped in a single transaction: if a delete on one table fails
+        # partway through, earlier deletes in this call roll back too,
+        # instead of leaving bronze in a half-wiped, inconsistent state.
+        cur.execute("BEGIN")
+        try:
+            for table in ALL_BRONZE_TABLES:
+                cur.execute(
+                    f"DELETE FROM {table} WHERE _batch_id = %s",
+                    (batch_id,),
+                )
+                deleted_rows = cur.rowcount
+                print(f"[batch {batch_id}] Deleted {deleted_rows} rows from {table}")
+            cur.execute("COMMIT")
+            print(f"[batch {batch_id}] All bronze tables cleaned up for re-ingestion.")
+        except Exception:
+            cur.execute("ROLLBACK")
+            raise
+
+
+def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path, force: bool = False) -> dict:
     """Execute bronze-layer data ingestion for a single batch directory."""
-    
+
     # Capitalizing "Batch" ensures strict alignment with naming conventions on case-sensitive file systems.
     batch_dir = data_dir / f"Batch{batch_id}"
     if not batch_dir.exists():
         raise FileNotFoundError(f"No directory found for batch {batch_id}: {batch_dir}")
-    
-    query = f"SELECT COUNT(*) FROM bronze_batch_control WHERE batch_id = {batch_id}"
+
+    # Pre-Ingestion Validation: check for existing batch records in the
+    # control table before touching anything else.
+    # [decision: parameterized query — not an f-string — to close the
+    # SQL-injection-pattern issue raised earlier]
+    query = "SELECT COUNT(*) FROM bronze_batch_control WHERE _batch_id = %s"
     with conn.cursor() as cur:
-        cur.execute(query)
-        if cur.fetchone()[0] > 0:
-            raise RuntimeError(f"Batch {batch_id} has already been ingested; aborting to prevent duplicate data.")
+        cur.execute(query, (batch_id,))
+        exists = cur.fetchone()[0] > 0
+
+    if exists:
+        if not force:
+            raise RuntimeError(
+                f"Batch {batch_id} has already been ingested; "
+                f"aborting to prevent duplicate data. "
+                f"Pass --force to delete and re-ingest it."
+            )
+        # [decision: --force must be explicit — default behavior stays a
+        # hard refusal, so an accidental re-run of the same batch doesn't
+        # silently wipe and reload data]
+        print(f"[batch {batch_id}] --force: deleting existing rows across all bronze tables before re-ingesting")
+        force_delete_batch(conn, batch_id)
 
     summary = {}
 
-    # Sequential Dependency: Process control metadata first so Snowflake target tables 
-    # receive the batch context before primary payload rows are ingested.
+    # [decision: bronze_batch_control loads FIRST, before anything else —
+    # so that if this run fails partway through, the next run for this
+    # batch_id is correctly detected as "already attempted" and routed
+    # through the --force check above, rather than silently reloading
+    # everything a second time.]
+    #
+    # [decision: BatchDate.txt is now REQUIRED, not optional. The old
+    # behavior silently skipped loading it if missing and carried on
+    # ingesting every other source anyway. That's exactly what breaks the
+    # safety net above: the exists-check only ever looks at
+    # bronze_batch_control, so a batch that finishes without ever writing
+    # a row there is indistinguishable from a batch that was never run at
+    # all. A later invocation (with or without --force) would see
+    # exists=False and load everything on top of the first run's data
+    # with no warning, no dedup, no error. Failing loud here — before any
+    # other source is touched — means a missing BatchDate.txt blocks the
+    # whole batch immediately instead of quietly poisoning the
+    # idempotency check for every future run of this batch_id.]
     batch_date_path = batch_dir / "BatchDate.txt"
     if batch_date_path.exists():
         load_batch_date(conn, batch_date_path, batch_id, tmp_dir)
         print(f"[batch {batch_id}] BatchDate.txt -> bronze_batch_control")
+    else:
+        raise FileNotFoundError(
+            f"[batch {batch_id}] Expected batch date file not found at path: '{batch_date_path}'"
+        )
+
+    # Loaded-row tracker: stem of the source filename -> actual rows loaded.
+    # Built incrementally as each source is ingested, so it can be compared
+    # against bronze_source_audit's expected RowCount at the end.
+    # Keys use the same stem convention as the audit file naming
+    # (source_file.replace("_audit.csv", "")), so FINWIRE/XML totals (which
+    # are already summed across their multiple target tables, per user's
+    # confirmation) line up with the single audit row per source file.
+    loaded_counts = {}
 
     # Dynamic Ingestion Loop: Iterate over configured sources rather than hardcoding.
     # Missing sources are skipped silently to support variable batch contents without brittle logic.
@@ -100,6 +177,7 @@ def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path) -> dict:
             continue
         count = load_delimited_source(conn, config, filepath, batch_id, tmp_dir)
         summary[source_name] = count
+        loaded_counts[filepath.stem] = count
         print(f"[batch {batch_id}] {source_name}: {count} rows -> {config['target_table']}")
 
     # Specialized Handler: XML demands custom hierarchical parsing before flattening into relational tables.
@@ -107,27 +185,76 @@ def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path) -> dict:
     if xml_path.exists():
         n_events, n_accounts = load_customer_mgmt_xml(conn, xml_path, batch_id, tmp_dir)
         summary["customer_mgmt_xml"] = n_events + n_accounts
+        loaded_counts[xml_path.stem] = n_events + n_accounts
         print(f"[batch {batch_id}] CustomerMgmt.xml: {n_events} events, {n_accounts} account links")
-        
+
     # File Pattern Matching: FINWIRE filenames vary by year/quarter (e.g., FINWIRE2015Q4).
     # Using glob matching decouples the script from static filename dependencies.
     finwire_files = [
-        f for f in batch_dir.glob("FINWIRE*") 
+        f for f in batch_dir.glob("FINWIRE*")
         if not f.name.endswith("_audit.csv")
     ]
-    
+
     # Explicit Sorting: Processes historical files in deterministic alphabetical order to prevent CDC sequence race conditions.
     for finwire_path in sorted(finwire_files):
         n = load_finwire_source(conn, finwire_path, batch_id, tmp_dir)
         summary[finwire_path.name] = n
+        loaded_counts[finwire_path.stem] = n
         print(f"[batch {batch_id}] {finwire_path.name}: {n} rows across CMP/SEC/FIN")
 
-    # Reconciliation Logic: Process audit files last so row count audits can compare 
+    # Reconciliation Logic: Process audit files last so row count audits can compare
     # against the freshly ingested bronze tables within the same execution scope.
     for audit_path in sorted(batch_dir.glob("*_audit.csv")):
         n = load_audit_source(conn, audit_path, batch_id, tmp_dir)
         summary[audit_path.name] = n
         print(f"[batch {batch_id}] {audit_path.name}: {n} rows -> bronze_source_audit")
+
+    # Reconciliation check: compare each audit file's stated RowCount against
+    # what actually landed in bronze, using the _source_file / stem mapping
+    # built above. [decision: mismatches are warned about via print, never
+    # fatal — a mismatch might have a legitimate explanation, so someone
+    # needs to notice it rather than have the batch abort automatically]
+    query = """
+            SELECT 
+                _source_file, 
+                value AS total_value
+            FROM 
+                bronze_source_audit 
+            WHERE 
+                _batch_id = %s 
+                AND Attribute LIKE '%%_RECORDS'
+
+            UNION ALL
+
+            SELECT 
+                _source_file, 
+                SUM(value) AS total_value
+            FROM 
+                bronze_source_audit
+            WHERE 
+                _batch_id = %s 
+                AND value > 0 
+                AND (
+                    _source_file IN ('Account_audit.csv', 'Customer_audit.csv', 'CustomerMgmt_audit.csv')
+                    OR _source_file LIKE '%%FINWIRE____Q__audit.csv%%'
+                )
+            GROUP BY 
+                _source_file;
+            """
+    with conn.cursor() as cur:
+        cur.execute(
+            query,
+            (batch_id, batch_id),
+        )
+        audit_rowcounts = cur.fetchall()
+
+    for source_file, expected in audit_rowcounts:
+        stem = source_file.replace("_audit.csv", "")
+        actual = loaded_counts.get(stem)
+        if actual is None:
+            print(f"[batch {batch_id}] WARNING: audit expects {stem} (RowCount={expected}) but no matching loaded source was found")
+        elif actual != expected:
+            print(f"[batch {batch_id}] WARNING: row count mismatch for {stem}: audit expects {expected}, bronze has {actual}")
 
     return summary
 
@@ -146,6 +273,15 @@ def main():
     parser.add_argument("--warehouse", default=getenv("SNOWFLAKE_WAREHOUSE"), help="Snowflake warehouse")
     parser.add_argument("--database", default=getenv("SNOWFLAKE_DATABASE", "brokerage_dwh"), help="Snowflake database name")
     parser.add_argument("--schema", default=getenv("SNOWFLAKE_SCHEMA", "bronze"), help="Snowflake schema name")
+
+    # Optional Force Flag: Allows users to explicitly delete existing batch data for re-ingestion.
+    # [decision: opt-in flag rather than automatic delete-then-insert, so
+    # that re-running the same batch by accident still fails loudly]
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Delete existing rows for this batch across all bronze tables before re-ingesting."
+    )
 
     args = parser.parse_args()
 
@@ -170,10 +306,10 @@ def main():
     # preventing concurrency collisions if multiple ingestion jobs execute in parallel.
     tmp_dir = Path(tempfile.mkdtemp(prefix=f"bronze_ingest_batch{args.batch_id}_"))
 
-    # Cleanup Guarantee: Wrapping logic in try...finally guarantees that DB connections 
+    # Cleanup Guarantee: Wrapping logic in try...finally guarantees that DB connections
     # are closed and temporary local disk storage is deleted, even if exceptions occur mid-batch.
     try:
-        summary = run_batch(conn, data_dir, args.batch_id, tmp_dir)
+        summary = run_batch(conn, data_dir, args.batch_id, tmp_dir, force=args.force)
         total = sum(v for v in summary.values() if isinstance(v, int))
         print(f"\nBatch {args.batch_id} complete. Total rows ingested: {total}")
     finally:
