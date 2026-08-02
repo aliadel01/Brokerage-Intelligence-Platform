@@ -1,0 +1,52 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: brokerage_dwh
+    schema: bronze
+    description: >
+      Raw landing layer. One row per source record per batch, no dedup,
+      no business-rule enforcement. Standard envelope on every table
+      (_batch_id, _source_file, _loaded_at, _row_hash); CDC-capable
+      tables additionally carry _cdc_flag / _cdc_dsn.
+
+    tables:
+
+      # ---------------- Archetype A ----------------
+      - name: bronze_date
+      - name: bronze_time
+      - name: bronze_status_type
+      - name: bronze_tax_rate
+      - name: bronze_industry
+      - name: bronze_trade_type
+      - name: bronze_hr
+
+      # ---------------- Archetype B: real CDC ----------------
+      - name: bronze_account
+      - name: bronze_customer
+      - name: bronze_trade
+
+      # ---------------- Archetype B: quasi-CDC ----------------
+      - name: bronze_holding_history
+      - name: bronze_watch_history
+      - name: bronze_daily_market
+      - name: bronze_cash_transaction
+
+      # ---------------- Archetype C ----------------
+      - name: bronze_prospect
+
+      # ---------------- Archetype D: FINWIRE ----------------
+      - name: bronze_finwire_cmp
+      - name: bronze_finwire_sec
+      - name: bronze_finwire_fin
+
+      # ---------------- Archetype D: CustomerMgmt.xml ----------------
+      - name: bronze_mgmt_customer
+      - name: bronze_mgmt_account
+
+      # ---------------- Archetype E ----------------
+      - name: bronze_trade_history
+
+      # ---------------- Operational / control ----------------
+      - name: bronze_batch_control
+      - name: bronze_source_audit

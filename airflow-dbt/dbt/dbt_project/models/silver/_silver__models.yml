@@ -1,0 +1,146 @@
+version: 2
+
+models:
+  # ---------------- Archetype A ----------------
+  - name: silver_date
+    columns:
+      - name: date_sk
+        tests: [not_null, unique]
+  - name: silver_time
+    columns:
+      - name: time_sk
+        tests: [not_null, unique]
+  - name: silver_status_type
+    columns:
+      - name: status_id
+        tests: [not_null, unique]
+  - name: silver_tax_rate
+    columns:
+      - name: tax_id
+        tests: [not_null, unique]
+      - name: tax_rate
+        tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 1, inclusive: true}
+  - name: silver_industry
+    columns:
+      - name: industry_id
+        tests: [not_null, unique]
+  - name: silver_trade_type
+    columns:
+      - name: trade_type_id
+        tests: [not_null, unique]
+  - name: silver_hr
+    columns:
+      - name: employee_id
+        tests: [not_null, unique]
+      - name: manager_id
+        tests:
+          - relationships: {to: ref('silver_hr'), field: employee_id}
+
+  # ---------------- Archetype B ----------------
+  - name: silver_customer
+    columns:
+      - name: customer_sk
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: gender
+        tests:
+          - accepted_values: {values: ['M', 'F'], config: {severity: warn}}
+  - name: silver_customer_history
+    columns:
+      - name: customer_version_sk
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]
+  - name: silver_account
+    columns:
+      - name: account_sk
+        tests: [not_null, unique]
+      - name: account_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests:
+          - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
+      - name: broker_employee_id
+        tests:
+          - relationships: {to: ref('silver_hr'), field: employee_id, config: {severity: warn}}
+  - name: silver_trade
+    columns:
+      - name: trade_sk
+        tests: [not_null, unique]
+      - name: trade_id
+        tests: [not_null, unique]
+      - name: account_id
+        tests:
+          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
+      - name: trade_type_id
+        tests:
+          - relationships: {to: ref('silver_trade_type'), field: trade_type_id, config: {severity: warn}}
+      - name: status_id
+        tests:
+          - relationships: {to: ref('silver_status_type'), field: status_id, config: {severity: warn}}
+  - name: silver_holding_history
+    columns:
+      - name: trade_id
+        tests:
+          - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
+  - name: silver_watch_history
+    columns:
+      - name: customer_id
+        tests:
+          - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
+      - name: watch_action
+        tests:
+          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
+  - name: silver_daily_market
+    columns:
+      - name: security_symbol
+        tests:
+          - relationships: {to: ref('silver_finwire_security'), field: security_symbol, config: {severity: warn}}
+  - name: silver_cash_transaction
+    columns:
+      - name: account_id
+        tests:
+          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
+
+  # ---------------- Archetype C ----------------
+  - name: silver_prospect
+    columns:
+      - name: prospect_id
+        tests: [not_null]
+
+  # ---------------- Archetype D ----------------
+  - name: silver_finwire_company
+    columns:
+      - name: company_sk
+        tests: [not_null, unique]
+      - name: cik
+        tests: [not_null, unique]
+      - name: industry_id
+        tests:
+          - relationships: {to: ref('silver_industry'), field: industry_id, config: {severity: warn}}
+  - name: silver_finwire_security
+    columns:
+      - name: security_sk
+        tests: [not_null, unique]
+      - name: security_symbol
+        tests: [not_null, unique]
+  - name: silver_finwire_financials
+    columns:
+      - name: company_cik
+        tests:
+          - relationships: {to: ref('silver_finwire_company'), field: cik, config: {severity: warn}}
+  - name: silver_customer_mgmt_event
+    columns:
+      - name: customer_id
+        tests: [not_null]
+  - name: silver_customer_mgmt_account
+    columns:
+      - name: account_id
+        tests: [not_null]
+  - name: silver_trade_history
+    columns:
+      - name: trade_id
+        tests:
+          - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
