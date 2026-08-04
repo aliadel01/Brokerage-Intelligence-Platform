@@ -1,44 +1,17 @@
 {#-
-    SCD Type 2 for Trade, single source (bronze_trade, real CDC -- no XML
-    counterpart, unlike account/customer).
+    Per 04_silver.md ADR-002: Trade is split by concern into two models.
+    This one owns the latest known STATE of a trade -- grain is one row
+    per trade_id. Full status-transition history is owned separately by
+    silver_trade_history.
 
-    GRAIN (04_silver.md decision #17): one row per trade_id per EVENT,
-    using trade_timestamp (t_dts) itself as the valid_from boundary --
-    NOT _batch_id. A trade can move through several lifecycle statuses
-    inside a single batch (e.g. submitted then completed same day), so
-    batch-level granularity (fine for account/customer) would collapse
-    real same-day status changes into one row here. Kept ONLY if a
-    tracked column differs from the immediately preceding EVENT (not
-    preceding batch).
+    Dedup shape: state-tracking (ADR-002), same shape as silver_prospect
+    -- one row per business key, latest wins. Ordered by _batch_id desc,
+    trade_timestamp desc, _cdc_dsn desc, _loaded_at desc.
 
-    Fixes applied to the original draft:
-      - `ref('bronze_trade')` -> `source('bronze', 'bronze_trade')`:
-        bronze tables are raw sources, not other dbt models.
-      - `{{ trim_or_null(t_s_symb) }}` -> `{{ trim_or_null('t_s_symb') }}`:
-        the macro takes a column-name string, not a bare identifier.
-      - Missing commas after _batch_id/_source_file/_loaded_at (syntax
-        error in the original -- would not have compiled).
-      - `brinze_trade` typo -> `bronze_trade_src`.
-      - `select *, <window fn>` in the final CTE mixed helper columns
-        (cdc_flag, prev_status_id, rn, etc.) into the output -- replaced
-        with an explicit column list, matching every other silver model.
-
-    No forward-fill in this model, unlike account/customer -- CONFIRMED
-    (not assumed): each bronze_trade event sends its full attribute
-    payload, not a sparse/partial one. Unlike account/customer's XML
-    source, there's no actiontype-driven gap to fill here.
-
-    TRACKED (drives a new version): status_id -- the actual lifecycle
-    signal this model exists to capture.
-    CARRIED-ONLY (present on every row, doesn't alone trigger a new
-    version): trade_type_id, is_cash, symbol, quantity, bid_price,
-    customer_account_id, execution_name, trade_price, charge, commission,
-    tax. Delegated column-selection decision -- these mostly get set once
-    (e.g. at execution) rather than revised repeatedly, so tracking them
-    wasn't judged necessary; adjust if wrong.
+    Every column here is simply "latest known value" for that trade_id.
 -#}
 
-with bronze_trade_src as (
+with source as (
     select
         t_id                                                as trade_id,
         t_dts                                                as trade_timestamp,
@@ -65,40 +38,11 @@ with bronze_trade_src as (
       and t_dts is not null
 ),
 
--- Defense-in-depth only: drops literal duplicate ingestion of the same
--- event. Every distinct event/status-change survives this step.
 deduped as (
-    {{ dedup_latest('bronze_trade_src', '_row_hash', '_batch_id desc, trade_timestamp desc, _cdc_dsn desc, _loaded_at desc') }}
-),
-
--- Only TRACKED (status_id) drives a new version -- compared against the
--- immediately preceding EVENT, not the preceding batch. No forward-fill
--- step here (confirmed each event sends a full payload) -- straight
--- from `deduped`.
-changed_only as (
-    select
-        *,
-        lag(status_id) over (partition by trade_id order by _batch_id, trade_timestamp, _cdc_dsn, _loaded_at) as prev_status_id
-    from deduped
-),
-
-versions as (
-    select *
-    from changed_only
-    where prev_status_id is null   -- first version ever seen for this trade
-       or status_id is distinct from prev_status_id
-),
-
-final as (
-    select
-        *,
-        lead(trade_timestamp) over (partition by trade_id order by _batch_id, trade_timestamp, _cdc_dsn, _loaded_at) as next_event_ts,
-        row_number() over (partition by trade_id order by _batch_id desc, trade_timestamp desc, _cdc_dsn desc, _loaded_at desc) = 1 as is_current
-    from versions
+    {{ dedup_latest('source', 'trade_id', '_batch_id desc, trade_timestamp desc, _cdc_dsn desc, _loaded_at desc') }}
 )
 
 select
-    {{ silver_surrogate_key(['trade_id', '_batch_id', 'trade_timestamp', '_cdc_dsn']) }} as trade_version_sk,
     trade_id,
     status_id,
     trade_type_id,
@@ -113,8 +57,6 @@ select
     commission,
     tax,
     cdc_flag,
-    trade_timestamp                                as valid_from_datetime,
-    coalesce(next_event_ts, timestamp '9999-12-31') as valid_to_datetime,
-    is_current,
+    trade_timestamp,
     _batch_id
-from final
+from deduped
