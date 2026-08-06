@@ -1,8 +1,11 @@
 {#-
-    Archetype D (parsed): Batch1 only, append-only-by-PTS, no CDC columns
-    in the source file at all. coname/cocik are already resolved into two
-    mutually-exclusive columns upstream in bronze (see ingestion layer
-    doc, _resolve_co_name_or_cik) -- passed through as-is here.
+    Grain: One row per (security_symbol, posting_ts).
+    
+    Preserves full append-only history of security states across time.
+    Deduplicates only physical ingestion retries using _loaded_at desc.
+    
+    coname/cocik are resolved upstream in bronze (_resolve_co_name_or_cik)
+    and passed through as-is.
 -#}
 
 with source as (

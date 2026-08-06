@@ -215,11 +215,15 @@ versions as (
 with_dates as (
     select
         v.*,
-        bc.asofdate as valid_from_date
-    from versions v
+    CASE 
+        WHEN v._source_table = 'bronze_mgmt_customer' THEN  cast(v.action_ts as date)
+        ELSE bc.asofdate
+    END as valid_from_date
+        from versions v
     left join {{ source('bronze', 'bronze_batch_control') }} bc
         on v._batch_id = bc._batch_id
 ),
+
 
 final as (
     select
@@ -230,7 +234,7 @@ final as (
 )
 
 select
-    {{ silver_surrogate_key(['customer_id', '_batch_id']) }} as customer_version_sk,
+    {{ surrogate_key(['customer_id', '_batch_id']) }} as customer_version_sk,
     customer_id,
     last_name,
     first_name,

@@ -46,7 +46,7 @@ with bronze_flat as (
         _loaded_at,
         'bronze_account'                                    as _source_table
     from {{ source('bronze', 'bronze_account') }}
-    where ca_id is not null
+    where ca_id is not null and ca_id = '1661' 
 ),
 
 bronze_xml as (
@@ -73,7 +73,7 @@ bronze_xml as (
         _loaded_at,
         'bronze_mgmt_account'                                as _source_table
     from {{ source('bronze', 'bronze_mgmt_account') }}
-    where ca_id is not null
+    where ca_id is not null and ca_id = '1661' 
 ),
 
 unioned as (
@@ -130,7 +130,10 @@ versions as (
 with_dates as (
     select
         v.*,
-        bc.asofdate as valid_from_date
+        CASE 
+            WHEN v._source_table = 'bronze_mgmt_account' THEN  cast(v.action_ts as date)
+        ELSE bc.asofdate
+    END as valid_from_date
     from versions v
     left join {{ source('bronze', 'bronze_batch_control') }} bc
         on v._batch_id = bc._batch_id
@@ -145,7 +148,7 @@ final as (
 )
 
 select
-    {{ silver_surrogate_key(['account_id', '_batch_id']) }} as account_version_sk,
+    {{ surrogate_key(['account_id', '_batch_id']) }} as account_version_sk,
     account_id,
     broker_id,
     customer_id,

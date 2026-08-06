@@ -52,5 +52,9 @@ models:
 
     gold:
       +schema: gold
-      # Placeholder only -- no gold models built yet. Materialization
-      # strategy for gold not decided; add it when that layer starts.
+      +materialized: view
+      
+      fact_tables:
+        +tags: ['gold', 'fact']
+      dim_tables:
+        +tags: ['gold', 'dim']
