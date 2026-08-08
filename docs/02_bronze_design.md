@@ -1,30 +1,23 @@
 # Bronze Layer 
 
 ## Table of contents
-- [Governing principle](#governing-principle)
-- [Archetypes](#archetypes)
-- [Source classification table](#source-classification-table)
-- [Open questions deferred to silver (do not resolve in bronze)](#open-questions-deferred-to-silver-do-not-resolve-in-bronze)
-- [Metadata envelope reference](#metadata-envelope-reference)
+- [Bronze Layer](#bronze-layer)
+  - [Table of contents](#table-of-contents)
+  - [Governing principle](#governing-principle)
+  - [Archetypes](#archetypes)
+  - [Source classification table](#source-classification-table)
+  - [Open questions deferred to silver (do not resolve in bronze)](#open-questions-deferred-to-silver-do-not-resolve-in-bronze)
+  - [Metadata envelope reference](#metadata-envelope-reference)
 
 ## Governing principle
 
-**Bronze is a 1:1 mirror of the source file.** If a source file's format
-includes `CDC_FLAG`/`CDC_DSN` columns, bronze stores them verbatim — even
-when the *values* turn out to be constant or non-informative on inspection
-(e.g. always `'I'`). Bronze never drops a column the source sent, and never
-infers/derives a value the source didn't provide.
+**Bronze is an exact 1:1 copy of the source file**. If a source file includes CDC_FLAG/CDC_DSN columns, bronze keeps them exactly as they are — even when the values turn out to be constant or not useful after checking (e.g. always 'I'). Bronze never drops a column the source sent, and never creates or calculates a value the source did not provide.
 
-Any decision about how to **interpret** a column — "treat this as
-append-only instead of state-tracking," "unify these two vocabularies,"
-"carry forward the last known value for a sparse update" — belongs in the
-**silver** layer. Bronze answers "what did the source send," never "what
-does it mean."
+Any decision about how to understand a column — "treat this as append-only instead of tracking state," "combine these two sets of codes," "carry forward the last known value for a partial update" — belongs in the silver layer. Bronze answers "what did the source send," never "what does it mean."
 
-This single rule resolved every ambiguous case in this design (see
-`bronze_watch_history`, `bronze_daily_market`, `bronze_holding_history`,
-`bronze_cash_transaction` below).
-
+> [!NOTE]
+>  The only exception to this 1:1 principle is the schema-shifting CDC archetype (Archetype B). Batch1 of these sources has no CDC columns at all, but Batch2/3 add them. Bronze must backfill the missing columns for Batch1 rows with `_cdc_flag = 'I'` and `_cdc_dsn = 0` so that all batches can land in a single target table with a consistent schema.
+> 
 ## Archetypes
 Our 21 sources are not homogeneous. There are really **five distinct source archetypes** hiding in this data dictionary, and each needs a different strategy:
 
@@ -97,6 +90,10 @@ Every bronze table carries:
 | `_source_file` | `VARCHAR` | Exact filename ingested |
 | `_loaded_at` | `TIMESTAMP_NTZ(3)` | Ingestion wall-clock time |
 | `_row_hash` | `NUMBER(20,0)` | Deterministic hash of business columns — QA/dedup signal |
+| `_dq_errors` | `VARIANT` | JSON array/object storing data quality validation rules output; NULL if no errors |
+
+> [!NOTE]
+> `bronze_batch_control` does not carry a `_dq_errors` column. Batch idempotency and re-ingestion detection (see Batch idempotency / re-ingestion) depend on this table having a valid asofdate for every batch — a NULL here would break that check, not just degrade data quality. So `load_batch_date` raises instead of soft-failing on a bad cast (see Failure handling): a row only ever lands in this table when asofdate is valid. Since every row is clean by construction, there's nothing for `_dq_errors` to ever record.
 
 CDC-capable sources (Archetype B) additionally carry:
 

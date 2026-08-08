@@ -25,6 +25,15 @@ Architectural Design Records:
       exactly this structure. Column names mirror Customer.txt's flattened
       convention (c_ctry_1, c_area_1, ...) by decision, so the two sources
       share a naming convention ahead of any silver-layer unification.
+    - DQ: No silent failures. Previously this loader cast ActionTS/C_ID/
+      C_TIER/C_DOB/CA_ID/CA_TAX_ST/CA_B_ID directly (int()/strptime()) with
+      no protection -- a single malformed value would crash the whole file
+      parse. All of these now go through _safe_cast, matching the delimited
+      and FINWIRE loaders: failed casts yield None plus a structured error
+      dict. Customer-row errors and account-row errors are packed
+      separately (each Account is its own row with its own _dq_errors) via
+      _pack_dq_errors. _int_or_none helper removed -- _safe_cast(..., int)
+      replaces it.
 """
 
 import xml.etree.ElementTree as ET
@@ -32,7 +41,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
-from ..common import compute_row_hash, StreamingCsvWriter
+from ..common import compute_row_hash, StreamingCsvWriter, _safe_cast, _pack_dq_errors
 from ..snowflake_client import copy_into
 
 
@@ -42,11 +51,6 @@ def load_customer_mgmt_xml(
     batch_id: int,
     tmp_dir: Path
 ) -> Tuple[int, int]:
-    """Parses `CustomerMgmt.xml`, flattens its hierarchy, and bulk-loads it into Snowflake Bronze tables.
-
-    Returns:
-        Tuple[int, int]: rows inserted into (bronze_mgmt_customer, bronze_mgmt_account).
-    """
     source_file = filepath.name
     loaded_at = datetime.now(timezone.utc)
 
@@ -56,17 +60,7 @@ def load_customer_mgmt_xml(
     customer_path = tmp_dir / f"mgmt_customer_b{batch_id}.csv"
     account_path = tmp_dir / f"mgmt_account_b{batch_id}.csv"
 
-    def _int_or_none(raw: Optional[str]) -> Optional[int]:
-        return int(raw) if raw else None
-
     def _phone_parts(contact_info, element_name: str):
-        """
-        Extract (ctry_code, area_code, local, ext) from a nested PhoneNumber
-        element (e.g. <C_PHONE_1><C_CTRY_CODE/>...</C_PHONE_1>). Returns
-        four Nones if contact_info is absent or the phone element itself
-        is absent -- both are legitimate per the XSD (minOccurs="0" at
-        every level: ContactInfo, C_PHONE_N, and each part inside it).
-        """
         if contact_info is None:
             return None, None, None, None
         phone_el = contact_info.find(element_name)
@@ -86,22 +80,33 @@ def load_customer_mgmt_xml(
             if action.tag != ACTION_TAG:
                 continue
 
+            errors = []
+
             action_type = action.get("ActionType")
-            action_ts = datetime.strptime(action.get("ActionTS"), "%Y-%m-%dT%H:%M:%S")
+            action_ts, err = _safe_cast(action.get("ActionTS"), lambda v: datetime.strptime(v, "%Y-%m-%dT%H:%M:%S"), "actionts")
+            if err:
+                errors.append(err)
 
             customer = action.find("Customer")
             if customer is None:
                 action.clear()
                 continue
 
-            c_id = int(customer.get("C_ID"))
+            c_id, err = _safe_cast(customer.get("C_ID"), int, "c_id")
+            if err:
+                errors.append(err)
+
             c_tax_id = customer.get("C_TAX_ID")
             c_gndr = customer.get("C_GNDR")
-            c_tier_raw = customer.get("C_TIER")
-            c_dob_raw = customer.get("C_DOB")
 
-            # Confirmed against real sample + XSD: Name/Address/ContactInfo/
-            # TaxInfo are nested elements under Customer, each optional.
+            c_tier, err = _safe_cast(customer.get("C_TIER"), int, "c_tier")
+            if err:
+                errors.append(err)
+
+            c_dob, err = _safe_cast(customer.get("C_DOB"), lambda v: datetime.strptime(v, "%Y-%m-%d").date(), "c_dob")
+            if err:
+                errors.append(err)
+
             name = customer.find("Name")
             c_l_name = name.findtext("C_L_NAME") if name is not None else None
             c_f_name = name.findtext("C_F_NAME") if name is not None else None
@@ -127,15 +132,14 @@ def load_customer_mgmt_xml(
             c_lcl_tx_id = tax_info.findtext("C_LCL_TX_ID") if tax_info is not None else None
             c_nat_tx_id = tax_info.findtext("C_NAT_TX_ID") if tax_info is not None else None
 
-            # Order matches bronze_mgmt_customer DDL exactly.
             customer_values = [
                 action_type,
                 action_ts,
                 c_id,
                 c_tax_id,
                 c_gndr,
-                _int_or_none(c_tier_raw),
-                datetime.strptime(c_dob_raw, "%Y-%m-%d").date() if c_dob_raw else None,
+                c_tier,
+                c_dob,
                 c_l_name,
                 c_f_name,
                 c_m_name,
@@ -155,29 +159,39 @@ def load_customer_mgmt_xml(
             ]
 
             row_hash = compute_row_hash(customer_values)
-            customer_w.write(customer_values + [batch_id, source_file, loaded_at, row_hash])
+            dq_errors = _pack_dq_errors(errors)
+            customer_w.write(customer_values + [batch_id, source_file, loaded_at, row_hash, dq_errors])
 
             for acct in customer.findall("Account"):
-                ca_id_raw = acct.get("CA_ID")
-                ca_tax_st_raw = acct.get("CA_TAX_ST")
-                ca_b_id_raw = acct.findtext("CA_B_ID")
+                acct_errors = []
+
+                ca_id, err = _safe_cast(acct.get("CA_ID"), int, "ca_id")
+                if err:
+                    acct_errors.append(err)
+
+                ca_tax_st, err = _safe_cast(acct.get("CA_TAX_ST"), int, "ca_tax_st")
+                if err:
+                    acct_errors.append(err)
+
+                ca_b_id, err = _safe_cast(acct.findtext("CA_B_ID"), int, "ca_b_id")
+                if err:
+                    acct_errors.append(err)
+
                 ca_name = acct.findtext("CA_NAME")
 
-                # Order matches bronze_mgmt_account DDL exactly (actiontype
-                # included -- CLOSEACCT/INACT status must be derivable from
-                # this column downstream, per the DDL note).
                 acct_values = [
                     action_type,
                     action_ts,
                     c_id,
-                    _int_or_none(ca_id_raw),
-                    _int_or_none(ca_tax_st_raw),
-                    _int_or_none(ca_b_id_raw),
+                    ca_id,
+                    ca_tax_st,
+                    ca_b_id,
                     ca_name,
                 ]
 
                 acct_row_hash = compute_row_hash(acct_values)
-                account_w.write(acct_values + [batch_id, source_file, loaded_at, acct_row_hash])
+                acct_dq_errors = _pack_dq_errors(acct_errors)
+                account_w.write(acct_values + [batch_id, source_file, loaded_at, acct_row_hash, acct_dq_errors])
 
             action.clear()
 
@@ -190,14 +204,14 @@ def load_customer_mgmt_xml(
             "c_ctry_2", "c_area_2", "c_local_2", "c_ext_2",
             "c_ctry_3", "c_area_3", "c_local_3", "c_ext_3",
             "c_lcl_tx_id", "c_nat_tx_id",
-            "_batch_id", "_source_file", "_loaded_at", "_row_hash",
+            "_batch_id", "_source_file", "_loaded_at", "_row_hash", "_dq_errors",
         ]
         copy_into(conn, "bronze_mgmt_customer", cols, customer_path)
 
     if account_w.count:
         cols = [
             "actiontype", "actionts", "c_id", "ca_id", "ca_tax_st", "ca_b_id", "ca_name",
-            "_batch_id", "_source_file", "_loaded_at", "_row_hash",
+            "_batch_id", "_source_file", "_loaded_at", "_row_hash", "_dq_errors",
         ]
         copy_into(conn, "bronze_mgmt_account", cols, account_path)
 

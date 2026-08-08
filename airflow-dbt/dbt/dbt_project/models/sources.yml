@@ -7,8 +7,11 @@ sources:
     description: >
       Raw landing layer. One row per source record per batch, no dedup,
       no business-rule enforcement. Standard envelope on every table
-      (_batch_id, _source_file, _loaded_at, _row_hash); CDC-capable
-      tables additionally carry _cdc_flag / _cdc_dsn.
+      (_batch_id, _source_file, _loaded_at, _row_hash, _dq_errors),
+      except bronze_batch_control which omits _row_hash and _dq_errors
+      since a row only lands there when its asofdate cast succeeded
+      (see 06_data_quality.md). CDC-capable tables additionally carry
+      _cdc_flag / _cdc_dsn.
 
     tables:
 

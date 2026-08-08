@@ -17,6 +17,8 @@
 --     _source_file  VARCHAR             -- exact filename ingested
 --     _loaded_at    TIMESTAMP_NTZ(3)    -- ingestion wall-clock time
 --     _row_hash     NUMBER(20,0)        -- hash of business columns, for QA/dedup
+--     _dq_errors    VARIANT             -- JSON array/object storing data quality validation rules output
+--          bronze_batch_control table does not carry _dq_errors (see 02_bronze_design.md #metadata-envelope-reference).
 -- Sources whose file format includes CDC_FLAG/CDC_DSN (as columns in the
 -- file itself) additionally carry:
 --     _cdc_flag     VARCHAR(1)          -- verbatim from source; backfilled
@@ -78,7 +80,8 @@ CREATE TABLE IF NOT EXISTS bronze_date
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_time
@@ -97,7 +100,8 @@ CREATE TABLE IF NOT EXISTS bronze_time
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_status_type
@@ -108,7 +112,8 @@ CREATE TABLE IF NOT EXISTS bronze_status_type
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_tax_rate
@@ -120,7 +125,8 @@ CREATE TABLE IF NOT EXISTS bronze_tax_rate
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_industry
@@ -132,7 +138,8 @@ CREATE TABLE IF NOT EXISTS bronze_industry
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 -- NOTE: TT_IS_SELL / TT_IS_MRKT are documented as NUM(1) flags in the spec
@@ -148,7 +155,8 @@ CREATE TABLE IF NOT EXISTS bronze_trade_type
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_hr
@@ -166,7 +174,8 @@ CREATE TABLE IF NOT EXISTS bronze_hr
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 
@@ -204,7 +213,8 @@ CREATE TABLE IF NOT EXISTS bronze_account
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_customer
@@ -247,7 +257,8 @@ CREATE TABLE IF NOT EXISTS bronze_customer
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_trade
@@ -273,7 +284,8 @@ CREATE TABLE IF NOT EXISTS bronze_trade
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_holding_history
@@ -289,7 +301,8 @@ CREATE TABLE IF NOT EXISTS bronze_holding_history
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_watch_history
@@ -305,7 +318,8 @@ CREATE TABLE IF NOT EXISTS bronze_watch_history
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_daily_market
@@ -323,7 +337,8 @@ CREATE TABLE IF NOT EXISTS bronze_daily_market
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 
@@ -340,7 +355,8 @@ CREATE TABLE IF NOT EXISTS bronze_cash_transaction
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 
@@ -377,7 +393,8 @@ CREATE TABLE IF NOT EXISTS bronze_prospect
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 
@@ -415,7 +432,8 @@ CREATE TABLE IF NOT EXISTS bronze_finwire_cmp
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_finwire_sec
@@ -438,7 +456,8 @@ CREATE TABLE IF NOT EXISTS bronze_finwire_sec
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 CREATE TABLE IF NOT EXISTS bronze_finwire_fin
@@ -464,7 +483,8 @@ CREATE TABLE IF NOT EXISTS bronze_finwire_fin
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 -- bronze_mgmt_customer: flattened from CustomerMgmt.xml <Action>/<Customer>.
@@ -511,7 +531,8 @@ CREATE TABLE IF NOT EXISTS bronze_mgmt_customer
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 -- bronze_mgmt_account: flattened from CustomerMgmt.xml <Action>/<Customer>/<Account>.
@@ -534,7 +555,8 @@ CREATE TABLE IF NOT EXISTS bronze_mgmt_account
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 
@@ -555,7 +577,8 @@ CREATE TABLE IF NOT EXISTS bronze_trade_history
     _batch_id           NUMBER(9,0),
     _source_file        VARCHAR,
     _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
-    _row_hash           NUMBER(20,0)
+    _row_hash           NUMBER(20,0),
+    _dq_errors          VARIANT
 );
 
 
@@ -584,5 +607,6 @@ CREATE TABLE IF NOT EXISTS bronze_source_audit
     dvalue              NUMBER(20,5),
 
     _source_file        VARCHAR,
-    _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3)
+    _loaded_at          TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3),
+    _dq_errors          VARIANT
 );

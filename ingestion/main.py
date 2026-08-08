@@ -99,8 +99,6 @@ def force_delete_batch(conn, batch_id: int) -> None:
         except Exception:
             cur.execute("ROLLBACK")
             raise
-
-
 def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path, force: bool = False) -> dict:
     """Execute bronze-layer data ingestion for a single batch directory."""
 
@@ -108,6 +106,14 @@ def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path, force: bool = 
     batch_dir = data_dir / f"Batch{batch_id}"
     if not batch_dir.exists():
         raise FileNotFoundError(f"No directory found for batch {batch_id}: {batch_dir}")
+
+    # Pre-Ingestion Validation: BatchDate.txt is required to ensure idempotency
+    # and proper batch tracking. Checked first, before anything else touches
+    # Snowflake or the filesystem further, since every safety check below
+    # (idempotency, --force) depends on this file having been loadable.
+    batch_date_path = batch_dir / "BatchDate.txt"
+    if not batch_date_path.exists():
+        raise FileNotFoundError(f"BatchDate.txt not found for batch {batch_id}")
 
     # Pre-Ingestion Validation: check for existing batch records in the
     # control table before touching anything else.
@@ -138,27 +144,17 @@ def run_batch(conn, data_dir: Path, batch_id: int, tmp_dir: Path, force: bool = 
     # batch_id is correctly detected as "already attempted" and routed
     # through the --force check above, rather than silently reloading
     # everything a second time.]
-    #
-    # [decision: BatchDate.txt is now REQUIRED, not optional. The old
-    # behavior silently skipped loading it if missing and carried on
-    # ingesting every other source anyway. That's exactly what breaks the
-    # safety net above: the exists-check only ever looks at
-    # bronze_batch_control, so a batch that finishes without ever writing
-    # a row there is indistinguishable from a batch that was never run at
-    # all. A later invocation (with or without --force) would see
-    # exists=False and load everything on top of the first run's data
-    # with no warning, no dedup, no error. Failing loud here — before any
-    # other source is touched — means a missing BatchDate.txt blocks the
-    # whole batch immediately instead of quietly poisoning the
-    # idempotency check for every future run of this batch_id.]
-    batch_date_path = batch_dir / "BatchDate.txt"
-    if batch_date_path.exists():
-        load_batch_date(conn, batch_date_path, batch_id, tmp_dir)
-        print(f"[batch {batch_id}] BatchDate.txt -> bronze_batch_control")
-    else:
-        raise FileNotFoundError(
-            f"[batch {batch_id}] Expected batch date file not found at path: '{batch_date_path}'"
-        )
+    
+    # [decision: BatchDate.txt existence is now checked at the TOP of
+    # run_batch(), before the idempotency check and before --force can
+    # delete anything. The old behavior checked existence here instead,
+    # which meant a --force re-run against a batch missing BatchDate.txt
+    # would wipe all of that batch's bronze rows first, then raise --
+    # leaving the batch empty instead of avoiding the wipe entirely.
+    # Checking upfront avoids that: a missing file now blocks the whole
+    # batch before any deletion or loading happens.]
+    load_batch_date(conn, batch_date_path, batch_id, tmp_dir)
+    print(f"[batch {batch_id}] BatchDate.txt -> bronze_batch_control")
 
     # Loaded-row tracker: stem of the source filename -> actual rows loaded.
     # Built incrementally as each source is ingested, so it can be compared

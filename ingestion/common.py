@@ -5,17 +5,19 @@ COPY INTO (Snowflake loads via stage + COPY INTO, not
 row-by-row INSERT).
 
 Function Summary:
-- _safe_cast: Safely cast a raw value to a target type, returning None for empty or invalid values.
+- _safe_cast: Returns a tuple of (casted_value, error_info). If casting is successful, error_info is None. If casting fails, casted_value is None and error_info contains details about the failure.
+- _pack_dq_errors: Aggregate a row's per-column cast errors into a single JSON string for _dq_errors, or None if clean.
 - compute_row_hash: Generate a deterministic 64-bit integer hash from a list of business column values. 
 - format_csv_value: Render a Python value into the exact string form the Snowflake file format expects.
 - StreamingCsvWriter: Chunked staging CSV writer for loaders that need to fan a single streamed input out to several target tables at once.
 - write_staging_csv: Writes rows to a CSV file in fixed-size chunks, bounding peak memory usage.
 """
 import csv
+import json
 import hashlib
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Callable, Iterable, List, Optional, Sequence
+from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
 
 def compute_row_hash(values: Sequence[Any]) -> int:
@@ -135,21 +137,32 @@ def write_staging_csv(path: str, rows: Iterable[Sequence[Any]],
     return count
 
 
-def _safe_cast(raw: Any, caster: Callable[[str], Any]) -> Optional[Any]:
-    """
-    Safely converts dirty raw strings into strong Python data types, suppressing 
-    parsing exceptions to ensure pipeline resilience against corrupt records.
-    """
-    if raw is None:
-        return None
+def _safe_cast(raw: Any, caster: Callable[[str], Any], col_name: str = "") -> tuple[Optional[Any], Optional[dict]]:
     
-    raw = str(raw).strip()
-    if raw == "":
-        return None
-        
+    """
+    Safely cast a raw value to a target type, returning None for empty or invalid values.
+    Returns a tuple of (casted_value, error_info). If casting is successful, error_info is None. If casting fails, casted_value is None and error_info contains details about the failure.
+    """
+    
+    if raw is None:
+        return None, None
+
+    raw_str = str(raw).strip()
+    if raw_str == "":
+        return None, None
+
     try:
-        return caster(raw)
-    except Exception:
-        # Fault Tolerance Strategy: Returns None for bad/malformed data to allow the row to land 
-        # in the Bronze layer, deferring data quality flags/rejection later.
-        return None
+        return caster(raw_str), None
+    except Exception as e:
+        error_info = {
+            "column": col_name,
+            "raw_value": raw_str,
+            "error_type": type(e).__name__,
+            "error_msg": str(e),
+        }
+        return None, error_info
+
+def _pack_dq_errors(errors: List[Optional[dict]]) -> Optional[str]:
+    """Aggregate a row's per-column cast errors into a single JSON string for _dq_errors, or None if clean."""
+    clean = [e for e in errors if e]
+    return json.dumps(clean) if clean else None
