@@ -1,5 +1,6 @@
 data/
 tools/
 logs/
+*.log
 .env
 __pycache__/

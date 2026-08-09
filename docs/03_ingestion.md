@@ -314,13 +314,26 @@ Additional notes:
 - Matching between an audit row's `_source_file` (`"<filename>_audit.csv"`)
   and a `loaded_counts` key is done by removing the `_audit.csv` suffix.
 
-A mismatch (or an audit entry with no matching loaded source) prints a
-`WARNING` line — it does **not** stop the batch. A mismatch can have a
-legitimate reason (e.g. rows skipped on purpose), so this is a "someone
-should notice and check" signal, not an automatic failure. In testing,
-this check already caught a real off-by-one in a locally-generated
-`WatchHistory`/`Account` sample, which confirms the comparison logic
-itself works correctly.
+**Every comparison outcome is now recorded as a row in
+`governance.dq_audit_log` via `log_dq_event()`, not just mismatches:**
+
+| Outcome | `check_type` | `severity` |
+|---|---|---|
+| counts match | `reconciliation_check` | `PASS` |
+| counts differ | `reconciliation_mismatch` | `WARNING` |
+| audit expects a source, none was loaded | `reconciliation_mismatch` | `WARNING` |
+
+A mismatch (or an audit entry with no matching loaded source) is also
+mirrored to the operational log (`log.warning(...)`, see
+[Failure handling](#failure-handling)) — it does **not** stop the batch.
+A mismatch can have a legitimate reason (e.g. rows skipped on purpose), so
+this is a "someone should notice and check" signal, not an automatic
+failure. Logging passing checks too, not only failures, means
+`dq_audit_log` shows full reconciliation *coverage* per batch — an
+auditor can confirm the check ran for every source, not just see the
+exceptions. In testing, this check already caught a real off-by-one in a
+locally-generated `WatchHistory`/`Account` sample, which confirms the
+comparison logic itself works correctly.
 
 ## Failure handling
 - **Delimited sources**: an unexpected field count on any line raises
@@ -350,7 +363,12 @@ itself works correctly.
   for why a silent skip here is unsafe in a way that skipping, say,
   `Prospect.csv` is not.
 - **Already-ingested batch without `--force`**: raises `RuntimeError`
-  right away, before any source is touched.****
+  right away, before any source is touched.
+- **Reconciliation mismatches**: never fatal (see
+  [Reconciliation check](#reconciliation-check)) — logged as a `WARNING`
+  row in `governance.dq_audit_log` *and* mirrored to the operational log
+  via `log.warning(...)`, so it's visible both to a human watching the
+  run and as a permanent, queryable record afterward.
 
 ## Data quality (short note)
 
@@ -360,14 +378,18 @@ values are caught, recorded, and kept traceable via `_dq_errors`; the one
 exception for `BatchDate.txt`'s `asofdate`) lives in `06_data_quality.md`,
 Ingestion section — see that doc for the complete picture.
 
+Batch-level DQ evidence (reconciliation check results, pass and fail) is
+recorded separately in `governance.dq_audit_log` — see
+[Reconciliation check](#reconciliation-check) above. `_dq_errors` and
+`dq_audit_log` operate at different grains: `_dq_errors` is per row/column
+cast errors carried on the row itself; `dq_audit_log` is per batch/per
+check evidence in its own table. Neither is process/debug output — that's
+the operational log (`logging_setup.py`), which is not persisted to
+Snowflake.
+
 ## Open items / not yet implemented
 
 - No "resume from partial failure" path — recovering from an interrupted
   run means re-running the whole batch with `--force` (full wipe +
   reload), not resuming from the point of failure. See
   [Batch idempotency / re-ingestion](#batch-idempotency--re-ingestion).
-- The reconciliation check (see above) warns on mismatch but has no
-  structured output (e.g. a summary table or exit code) — it's
-  `print`-only, meant for a human watching the run, not yet wired into
-  any automated alerting.
-- No Logs implementation 

@@ -3,7 +3,7 @@
   1. [Roles & Access Control](#roles--access-control)
   2. [Data Classification](#data-classification)
   3. [PII Masking Policies](#pii-masking-policies)
-  4. [Governance & Audit Trail](#governance--audit-trail)
+  4. [DQ-as-Control on Ingestion](#dq-as-control-on-ingestion)
   5. [Open items](#open-items)
 
 
@@ -167,19 +167,83 @@ SELECT middle_initial FROM brokerage_dwh.silver.silver_hr LIMIT 5;
 
 </div>
 
-## Governance & Audit Trail
+## DQ-as-Control on Ingestion
+Scope: bronze-layer ingestion (`main.py`).
 
-The `brokerage_dwh.governance` schema holds evidence *about* the pipeline
-— not business data itself. Kept in its own schema, separate from
-`bronze`/`silver`/`gold`, because it answers a different question: those
-layers hold *the data*; governance holds *proof the data was controlled*.
+### `governance.dq_audit_log` (Snowflake table)
 
-- **`dq_audit_log`** — a structured table replacing `print()`-only
-  reconciliation warnings with a queryable, timestamped record: which
-  batch, what kind of check failed, expected vs. actual value, severity.
-  Anyone with `role_custodian` (or the service accounts that write to it)
-  can query this months later as compliance evidence, instead of relying
-  on whoever happened to be watching the terminal when the pipeline ran.
+Structured, queryable DQ evidence trail. Replaces `print()`-only reconciliation
+warnings. Permanent record — not overwritten, not rotated.
+
+### `log_dq_event()` (`main.py`)
+
+Inserts one row per DQ check result. Own transaction: commits on success,
+rolls back and raises `RuntimeError` on failure — a broken audit-log insert
+must not silently disappear.
+
+
+  ```python
+  def log_dq_event(conn, batch_id, check_type, source_file,
+                    expected_value, actual_value, severity, message):
+      ...
+  ```
+
+
+### Reconciliation check — full audit artifact
+
+Existing reconciliation query (audit file `RowCount` vs actual bronze rows
+loaded) now logs **every** outcome, not just failures:
+
+| Outcome | `check_type` | `severity` |
+|---|---|---|
+| counts match | `reconciliation_check` | `PASS` |
+| counts differ | `reconciliation_mismatch` | `WARNING` |
+| audit expects a source, none was loaded | `reconciliation_mismatch` | `WARNING` |
+
+Decision: logging passes too (not only exceptions) means the table shows
+reconciliation *coverage* per batch — an auditor can confirm the check ran
+for every source, not just see the failures. Mismatches remain non-fatal:
+a mismatch may have a legitimate explanation, so someone reviews it rather
+than the batch aborting automatically.
+
+### Operational logging (`logging_setup.py`)
+
+Separate from the DQ audit trail — this is process/progress output, not
+business evidence. Not written to Snowflake.
+
+```python
+def get_logger(batch_id: int, log_file: str | None = None) -> logging.LoggerAdapter:
+    ...
+```
+
+- Console handler always on; file handler added when `--log-file` is passed.
+- `LoggerAdapter` injects `batch_id` into every record automatically.
+- All `main.py` `print()` calls replaced with `log.info(...)` / `log.warning(...)`.
+- `force_delete_batch()` and `run_batch()` now take a `log` parameter.
+
+### `_dq_errors` — row/column-level cast errors (Problem 3 in `06_data_quality`, pre-existing)
+ 
+Separate again from the two logs above — this is per-row evidence, not
+process output and not a batch-level audit table.
+We talked about it in `06_data_quality.md`.
+ 
+### Where each piece of evidence lives
+ 
+| | `_dq_errors` | DQ audit trail | Operational log |
+|---|---|---|---|
+| Where | column on every bronze table | `governance.dq_audit_log` (Snowflake) | stdout / optional file |
+| Grain | per row, per column | per batch, per check | per process run |
+| What | failed casts (raw value, error type/msg) | check results (pass/fail, expected/actual) | progress, errors, debug |
+| Lifetime | permanent, lives with the row | permanent, queryable | transient, run-scoped |
+| Who acts on it | silver (fix/flag/reject) | auditor/reviewer | developer |
+| Written by | `_safe_cast()` / `_pack_dq_errors()` | `log_dq_event()` | `log.info` / `log.warning` (stdlib `logging`) |
+ 
+Keeping these three apart avoids forcing operational noise (row counts,
+"batch complete") into a schema meant for check evidence, avoids losing
+DQ evidence in a log stream nobody archives, and keeps row-level cast
+errors traveling with the row itself rather than off in a separate table
+that would need a join to reconstruct which row was dirty.
+ 
 
 ## Open items
 

@@ -15,9 +15,32 @@ Function Summary:
 import csv
 import json
 import hashlib
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
+
+def get_logger(batch_id: int, log_file: str | None = None) -> logging.LoggerAdapter:
+    logger = logging.getLogger("bronze_ingestion")
+    logger.setLevel(logging.INFO)
+ 
+    if not logger.handlers:  # avoid duplicate handlers on repeated calls
+        fmt = logging.Formatter(
+            "%(asctime)s [batch %(batch_id)s] %(levelname)s %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+ 
+        console = logging.StreamHandler()
+        console.setFormatter(fmt)
+        logger.addHandler(console)
+ 
+        if log_file:
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setFormatter(fmt)
+            logger.addHandler(file_handler)
+ 
+    # inject batch_id into every record without repeating it at each call site
+    return logging.LoggerAdapter(logger, {"batch_id": batch_id})
 
 
 def compute_row_hash(values: Sequence[Any]) -> int:

@@ -115,6 +115,9 @@ A loader can run "successfully" and still have silently dropped or duplicated ro
 
 **Code reference:** the reconciliation query and comparison loop at the end of `run_batch()` in `main.py`.
 
+### Problem 9 — DQ-as-Control on Ingestion
+You can see the full documentation of this phase in `07_governance.md` — `DQ-as-Control on Ingestion` section.
+
 ### Metadata backbone
 Every row in every bronze table carries: `_batch_id`, `_source_file`, `_loaded_at`, `_row_hash`, `_dq_errors`. Together these give us **lineage** (where a row came from), **dedup/QA** (`_row_hash` — is this row identical to one we've seen before), and **traceability** (`_dq_errors` — exactly what was dirty about this row and why).
 
