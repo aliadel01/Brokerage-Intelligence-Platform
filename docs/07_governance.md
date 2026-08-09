@@ -1,10 +1,51 @@
 # Governance, Compliance and Ownership
 ## Table of Contents
-1. [Data Classification](#data-classification)
-2. [Roles & Access Control](#roles--access-control)
-3. [PII Masking Policies](#pii-masking-policies)
-4. [Governance & Audit Trail](#governance--audit-trail)
-5. [Open items](#open-items)
+  1. [Roles & Access Control](#roles--access-control)
+  2. [Data Classification](#data-classification)
+  3. [PII Masking Policies](#pii-masking-policies)
+  4. [Governance & Audit Trail](#governance--audit-trail)
+  5. [Open items](#open-items)
+
+
+## Roles & Access Control
+
+Four roles, split along two axes: **service account vs. human login**, and
+**what layer they can see**. See `sql/roles.sql` for the full grant script.
+
+1. **`role_bronze_loader`** — **service account**, no human login. **Owns bronze
+   only**: `SELECT`/`INSERT`/`DELETE` on every bronze table, plus
+   `READ`/`WRITE` on the ingestion stage. This is the identity the Python
+   ingestion pipeline (`main.py`) authenticates as — never a human
+   credential. Also has `INSERT`/`SELECT` on `governance.dq_audit_log` to
+   log reconciliation mismatches.
+
+2. **`role_custodian`** — **human login**, **read-only** across all three layers
+   ***(bronze, silver, gold)***, plus read access to `governance`. This is the
+   "sees everything unmasked" role: the masking policies below explicitly
+   check for this role (or `ACCOUNTADMIN`) to return real PII values. In
+   practice, this is the project owner/maintainer — the one identity
+   trusted to see raw data end-to-end for debugging, audits, and
+   verification.
+
+3. **`role_analyst`** — **human login**, **read-only** across ***silver and gold***
+   only. No bronze access at all (enforced by explicit `REVOKE`, not just
+   omission). `restricted_pii` columns appear masked (`***MASKED***` /
+   `NULL`) to this role, since it falls outside the unmask condition in
+   the masking policies. `confidential` columns (including the prospect
+   financial attributes above) are **not** masked and are visible to this
+   role. Represents any downstream consumer who needs the modeled data
+   but has no business reason to see raw bronze or unmasked identity PII.
+
+4. **`role_dbt_prod_ci`** — **service account** for dbt runs, no human login.
+   **Read-only on bronze** (dbt selects from it, never writes to it), full
+   build rights (`CREATE TABLE`/`CREATE VIEW`/`ALL`) on silver and gold —
+   this is the role that actually materializes the dbt models. Also logs
+   to `governance.dq_audit_log` (e.g. failed dbt tests). Kept deliberately
+   separate from `role_bronze_loader` — Segregation of Duties: one
+   identity able to both write raw bronze *and* rebuild every downstream
+   transformation would mean a single compromised credential (or a single
+   bug) could corrupt the entire pipeline end-to-end, with no boundary in
+   between.
 
 ## Data Classification
 
@@ -69,50 +110,12 @@ each column's definition — useful for anyone reading the model without
 querying Snowflake directly. **The Snowflake tag is authoritative; the
 YAML is a mirror of it, not a second source of truth.**
 
-## Roles & Access Control
 
-Four roles, split along two axes: **service account vs. human login**, and
-**what layer they can see**. See `sql/roles.sql` for the full grant script.
-
-1. **`role_bronze_loader`** — **service account**, no human login. **Owns bronze
-   only**: `SELECT`/`INSERT`/`DELETE` on every bronze table, plus
-   `READ`/`WRITE` on the ingestion stage. This is the identity the Python
-   ingestion pipeline (`main.py`) authenticates as — never a human
-   credential. Also has `INSERT`/`SELECT` on `governance.dq_audit_log` to
-   log reconciliation mismatches.
-
-2. **`role_custodian`** — **human login**, **read-only** across all three layers
-   ***(bronze, silver, gold)***, plus read access to `governance`. This is the
-   "sees everything unmasked" role: the masking policies below explicitly
-   check for this role (or `ACCOUNTADMIN`) to return real PII values. In
-   practice, this is the project owner/maintainer — the one identity
-   trusted to see raw data end-to-end for debugging, audits, and
-   verification.
-
-3. **`role_analyst`** — **human login**, **read-only** across ***silver and gold***
-   only. No bronze access at all (enforced by explicit `REVOKE`, not just
-   omission). `restricted_pii` columns appear masked (`***MASKED***` /
-   `NULL`) to this role, since it falls outside the unmask condition in
-   the masking policies. `confidential` columns (including the prospect
-   financial attributes above) are **not** masked and are visible to this
-   role. Represents any downstream consumer who needs the modeled data
-   but has no business reason to see raw bronze or unmasked identity PII.
-
-4. **`role_dbt_prod_ci`** — **service account** for dbt runs, no human login.
-   **Read-only on bronze** (dbt selects from it, never writes to it), full
-   build rights (`CREATE TABLE`/`CREATE VIEW`/`ALL`) on silver and gold —
-   this is the role that actually materializes the dbt models. Also logs
-   to `governance.dq_audit_log` (e.g. failed dbt tests). Kept deliberately
-   separate from `role_bronze_loader` — Segregation of Duties: one
-   identity able to both write raw bronze *and* rebuild every downstream
-   transformation would mean a single compromised credential (or a single
-   bug) could corrupt the entire pipeline end-to-end, with no boundary in
-   between.
 
 ## PII Masking Policies
 
 The control rules that enforce classification policy on `restricted_pii`
-columns live in `governance` too (see `sql/masking.sql`), as reusable
+columns live in `governance` too (see `sql/masking_policy`), as reusable
 policy definitions rather than one-off logic per table:
 
 - **Masking policies** (`mask_pii_string`, `mask_pii_date`,
@@ -123,15 +126,9 @@ policy definitions rather than one-off logic per table:
   every other role (including `role_analyst`) sees the masked form —
   automatically, on every query, with no per-query logic needed on the
   consumer's side.
-- `mask_pii_numeric` exists specifically for numeric `restricted_pii`
-  columns (e.g. `silver_prospect.age`, `number_cars`, `number_children`,
-  `number_credit_cards`) that `mask_pii_string`/`mask_pii_date` don't
-  cover. It returns `NULL` for any role other than `role_custodian` /
-  `ACCOUNTADMIN`.
-- **Not applied** to `confidential` columns anywhere in the warehouse,
-  including the prospect financial attributes (`income`, `credit_rating`,
-  `net_worth`, `employer`) — consistent with how `confidential` is
-  handled everywhere else (e.g. trade prices, account IDs).
+- `mask_pii_numeric`, `mask_pii_date` return `NULL` for masked values, since a numeric or date value has no
+  obvious "masked" string representation. `mask_pii_string` returns
+  `***MASKED***` for masked string values.
 
 **Real Example**:
 
