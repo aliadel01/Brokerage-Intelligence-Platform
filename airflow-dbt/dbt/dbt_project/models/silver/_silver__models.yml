@@ -1,146 +1,1708 @@
 version: 2
 
 models:
-  # ---------------- Archetype A ----------------
+  # =========================================================================
+  # SILVER LAYER MODELS
+  # =========================================================================
+
   - name: silver_date
+    config:
+      contract:
+        enforced: true
     columns:
       - name: date_sk
+        data_type: integer
         tests: [not_null, unique]
-  - name: silver_time
-    columns:
-      - name: time_sk
-        tests: [not_null, unique]
-  - name: silver_status_type
-    columns:
-      - name: status_id
-        tests: [not_null, unique]
-  - name: silver_tax_rate
-    columns:
-      - name: tax_id
-        tests: [not_null, unique]
-      - name: tax_rate
-        tests:
-          - dbt_utils.accepted_range: {min_value: 0, max_value: 1, inclusive: true}
-  - name: silver_industry
-    columns:
-      - name: industry_id
-        tests: [not_null, unique]
-  - name: silver_trade_type
-    columns:
-      - name: trade_type_id
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: date_value
+        data_type: date
+        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: date_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_year_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_year_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_qtr_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_qtr_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_month_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_month_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_week_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: calendar_week_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: day_of_week_num
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: day_of_week_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: fiscal_year_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: fiscal_year_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: fiscal_qtr_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: fiscal_qtr_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: holiday_flag
+        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
   - name: silver_hr
+    config:
+      contract:
+        enforced: true
     columns:
       - name: employee_id
+        data_type: integer
         tests: [not_null, unique]
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: manager_id
+        data_type: integer
         tests:
           - relationships: {to: ref('silver_hr'), field: employee_id}
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: first_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: last_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: middle_initial
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: job_code
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: branch
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: office
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: phone
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
 
-  # ---------------- Archetype B ----------------
-  - name: silver_customer
+  - name: silver_industry
+    config:
+      contract:
+        enforced: true
     columns:
-      - name: customer_sk
+      - name: industry_id
+        data_type: varchar
         tests: [not_null, unique]
-      - name: customer_id
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: industry_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: sector_id
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_status_type
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: status_id
+        data_type: varchar
         tests: [not_null, unique]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: status_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_tax_rate
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: tax_rate_id
+        data_type: varchar
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: tax_rate_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: tax_rate
+        data_type: numeric
+        tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 1, inclusive: true}
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_time
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: time_sk
+        data_type: integer
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: time_value
+        data_type: time
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: hour_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: hour_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: minute_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: minute_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: second_id
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: second_desc
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: market_hours_flag
+        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: office_hours_flag
+        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_trade_type
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: trade_type_id
+        data_type: varchar
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: trade_type_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: is_sell_flag
+        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: is_market_flag
+        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_prospect
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: agency_id
+        data_type: varchar
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: last_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: first_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: middle_initial
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: gender
-        tests:
-          - accepted_values: {values: ['M', 'F'], config: {severity: warn}}
-  - name: silver_customer_history
-    columns:
-      - name: customer_version_sk
-        tests: [not_null, unique]
-      - name: customer_id
-        tests: [not_null]
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: address_line1
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: address_line2
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: postal_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: city
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: state
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: country
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: income
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: number_cars
+        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: number_children
+        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: marital_status
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: age
+        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: credit_rating
+        data_type: integer
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: own_or_rent_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: employer
+        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: number_credit_cards
+        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: net_worth
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
   - name: silver_account
+    config:
+      contract:
+        enforced: true
     columns:
-      - name: account_sk
+      - name: account_version_sk
+        data_type: varchar
         tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: account_id
-        tests: [not_null, unique]
-      - name: customer_id
-        tests:
-          - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
-      - name: broker_employee_id
+        data_type: integer
+        tests: [not_null]
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: broker_id
+        data_type: integer
         tests:
           - relationships: {to: ref('silver_hr'), field: employee_id, config: {severity: warn}}
-  - name: silver_trade
-    columns:
-      - name: trade_sk
-        tests: [not_null, unique]
-      - name: trade_id
-        tests: [not_null, unique]
-      - name: account_id
-        tests:
-          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
-      - name: trade_type_id
-        tests:
-          - relationships: {to: ref('silver_trade_type'), field: trade_type_id, config: {severity: warn}}
-      - name: status_id
-        tests:
-          - relationships: {to: ref('silver_status_type'), field: status_id, config: {severity: warn}}
-  - name: silver_holding_history
-    columns:
-      - name: trade_id
-        tests:
-          - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
-  - name: silver_watch_history
-    columns:
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: customer_id
+        data_type: integer
         tests:
           - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
-      - name: watch_action
-        tests:
-          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
-  - name: silver_daily_market
-    columns:
-      - name: security_symbol
-        tests:
-          - relationships: {to: ref('silver_finwire_security'), field: security_symbol, config: {severity: warn}}
-  - name: silver_cash_transaction
-    columns:
-      - name: account_id
-        tests:
-          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
-
-  # ---------------- Archetype C ----------------
-  - name: silver_prospect
-    columns:
-      - name: prospect_id
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: account_name
+        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: tax_status
+        data_type: integer
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: status_id
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: cdc_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: valid_from_date
+        data_type: date
         tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: valid_to_date
+        data_type: date
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: is_current
+        data_type: boolean
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _source_table
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
 
-  # ---------------- Archetype D ----------------
-  - name: silver_finwire_company
+  - name: silver_customer
+    config:
+      contract:
+        enforced: true
     columns:
-      - name: company_sk
+      - name: customer_version_sk
+        data_type: varchar
         tests: [not_null, unique]
-      - name: cik
-        tests: [not_null, unique]
-      - name: industry_id
-        tests:
-          - relationships: {to: ref('silver_industry'), field: industry_id, config: {severity: warn}}
-  - name: silver_finwire_security
-    columns:
-      - name: security_sk
-        tests: [not_null, unique]
-      - name: security_symbol
-        tests: [not_null, unique]
-  - name: silver_finwire_financials
-    columns:
-      - name: company_cik
-        tests:
-          - relationships: {to: ref('silver_finwire_company'), field: cik, config: {severity: warn}}
-  - name: silver_customer_mgmt_event
-    columns:
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: customer_id
+        data_type: integer
         tests: [not_null]
-  - name: silver_customer_mgmt_account
-    columns:
-      - name: account_id
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: last_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: first_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: middle_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: gender
+        data_type: varchar
+        tests:
+          - accepted_values: {values: ['M', 'F'], config: {severity: warn}}
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: tier
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: date_of_birth
+        data_type: date
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: address_line1
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: address_line2
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: postal_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: city
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: state_province
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: country
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: primary_email
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: alternate_email
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: tax_id
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: local_tax_rate_id
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: national_tax_rate_id
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: phone1_country_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone1_area_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone1_number
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone1_extension
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone2_country_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone2_area_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone2_number
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone2_extension
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone3_country_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone3_area_code
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone3_number
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: phone3_extension
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: status_id
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: cdc_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: valid_from_date
+        data_type: date
         tests: [not_null]
-  - name: silver_trade_history
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: valid_to_date
+        data_type: date
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: is_current
+        data_type: boolean
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _source_table
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_trade
+    config:
+      contract:
+        enforced: true
     columns:
       - name: trade_id
+        data_type: integer
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: status_id
+        data_type: varchar
         tests:
+          - relationships: {to: ref('silver_status_type'), field: status_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: trade_type_id
+        data_type: varchar
+        tests:
+          - relationships: {to: ref('silver_trade_type'), field: trade_type_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: is_cash
+        data_type: boolean
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: symbol
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: quantity
+        data_type: numeric
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: bid_price
+        data_type: numeric
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: customer_account_id
+        data_type: integer
+        tests:
+          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: execution_name
+        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
+      - name: trade_price
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: charge
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: commission
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: tax
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: cdc_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: trade_timestamp
+        data_type: timestamp_ntz
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_finwire_cmp
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: posting_ts
+        data_type: timestamp_ntz
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: company_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: cik
+        data_type: varchar
+        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: status
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: industry_id
+        data_type: varchar
+        tests:
+          - relationships: {to: ref('silver_industry'), field: industry_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: sp_rating
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: founding_date
+        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: address_line1
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: address_line2
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: postal_code
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: city
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: state_province
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: country
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: ceo_name
+        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: description
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_finwire_sec
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: posting_ts
+        data_type: timestamp_ntz
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: security_symbol
+        data_type: varchar
+        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: issue_type
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: status
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: security_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: exchange_id
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: shares_outstanding
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: first_trade_date
+        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: first_trade_exchange_date
+        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: dividend
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: company_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: company_cik
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_cash_transaction
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: account_id
+        data_type: integer
+        tests:
+          - not_null
+          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: transaction_ts
+        data_type: timestamp_ntz
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: amount
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: description
+        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: _cdc_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _cdc_dsn
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_daily_market
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: market_date
+        data_type: date
+        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: security_symbol
+        data_type: varchar
+        tests:
+          - not_null
+          - relationships: {to: ref('silver_finwire_sec'), field: security_symbol, config: {severity: warn}}
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: close_price
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: high_price
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: low_price
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: volume
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _cdc_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _cdc_dsn
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_holding_history
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: originating_trade_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: trade_id
+        data_type: integer
+        tests:
+          - not_null
           - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: qty_before
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: qty_after
+        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: _cdc_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _cdc_dsn
+        data_type: integer
+        meta:
+          classification: internal
+          pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_watch_history
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: customer_id
+        data_type: integer
+        tests:
+          - not_null
+          - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: confidential
+            pii: false
+      - name: security_symbol
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: event_ts
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: watch_action
+        data_type: varchar
+        tests:
+          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _cdc_flag
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _cdc_dsn
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_finwire_fin
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: posting_ts
+        data_type: timestamp_ntz
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: year
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: quarter
+        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: qtr_start_date
+        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: posting_date
+        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: revenue
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: earnings
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: eps
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: diluted_eps
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: margin
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: inventory
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: assets
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: liabilities
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: shares_outstanding
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: diluted_shares_outstanding
+        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: company_name
+        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: company_cik
+        data_type: varchar
+        tests:
+          - relationships: {to: ref('silver_finwire_cmp'), field: cik, config: {severity: warn}}
+        config:
+          meta:
+            classification: public
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+
+  - name: silver_trade_history
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: trade_id
+        data_type: integer
+        tests:
+          - not_null
+          - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: status_ts
+        data_type: timestamp_ntz
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: status_id
+        data_type: varchar
+        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _batch_id
+        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _row_hash
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _source_model
+        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false

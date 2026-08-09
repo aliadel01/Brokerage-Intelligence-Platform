@@ -11,7 +11,10 @@ sources:
       except bronze_batch_control which omits _row_hash and _dq_errors
       since a row only lands there when its asofdate cast succeeded
       (see 06_data_quality.md). CDC-capable tables additionally carry
-      _cdc_flag / _cdc_dsn.
+      _cdc_flag / _cdc_dsn. Column-level classification below mirrors
+      the Snowflake data_classification tag applied directly on the
+      warehouse (see 07_governance.md) — this is the documented view,
+      the tag is the enforced source of truth.
 
     tables:
 
@@ -23,29 +26,222 @@ sources:
       - name: bronze_industry
       - name: bronze_trade_type
       - name: bronze_hr
+        columns:
+          - name: employeefirstname
+            meta: { classification: restricted_pii }
+          - name: employeelastname
+            meta: { classification: restricted_pii }
+          - name: employeemi
+            meta: { classification: restricted_pii }
+          - name: employeephone
+            meta: { classification: restricted_pii }
 
       # ---------------- Archetype B: real CDC ----------------
       - name: bronze_account
+        columns:
+          - name: ca_id
+            meta: { classification: confidential }
+          - name: ca_name
+            meta: { classification: confidential }
       - name: bronze_customer
+        columns:
+          - name: c_tax_id
+            meta: { classification: restricted_pii }
+          - name: c_l_name
+            meta: { classification: restricted_pii }
+          - name: c_f_name
+            meta: { classification: restricted_pii }
+          - name: c_m_name
+            meta: { classification: restricted_pii }
+          - name: c_gndr
+            meta: { classification: restricted_pii }
+          - name: c_dob
+            meta: { classification: restricted_pii }
+          - name: c_adline1
+            meta: { classification: restricted_pii }
+          - name: c_adline2
+            meta: { classification: restricted_pii }
+          - name: c_zipcode
+            meta: { classification: restricted_pii }
+          - name: c_city
+            meta: { classification: restricted_pii }
+          - name: c_state_prov
+            meta: { classification: restricted_pii }
+          - name: c_ctry
+            meta: { classification: restricted_pii }
+          - name: c_prim_email
+            meta: { classification: restricted_pii }
+          - name: c_alt_email
+            meta: { classification: restricted_pii }
+          - name: c_ctry_1
+            meta: { classification: restricted_pii }
+          - name: c_area_1
+            meta: { classification: restricted_pii }
+          - name: c_local_1
+            meta: { classification: restricted_pii }
+          - name: c_ext_1
+            meta: { classification: restricted_pii }
+          - name: c_ctry_2
+            meta: { classification: restricted_pii }
+          - name: c_area_2
+            meta: { classification: restricted_pii }
+          - name: c_local_2
+            meta: { classification: restricted_pii }
+          - name: c_ext_2
+            meta: { classification: restricted_pii }
+          - name: c_ctry_3
+            meta: { classification: restricted_pii }
+          - name: c_area_3
+            meta: { classification: restricted_pii }
+          - name: c_local_3
+            meta: { classification: restricted_pii }
+          - name: c_ext_3
+            meta: { classification: restricted_pii }
+          - name: c_tier
+            meta: { classification: confidential }
       - name: bronze_trade
+        columns:
+          - name: t_exec_name
+            meta: { classification: restricted_pii }
+          - name: t_trade_price
+            meta: { classification: confidential }
+          - name: t_bid_price
+            meta: { classification: confidential }
+          - name: t_comm
+            meta: { classification: confidential }
+          - name: t_chrg
+            meta: { classification: confidential }
+          - name: t_tax
+            meta: { classification: confidential }
 
       # ---------------- Archetype B: quasi-CDC ----------------
       - name: bronze_holding_history
       - name: bronze_watch_history
       - name: bronze_daily_market
       - name: bronze_cash_transaction
+        columns:
+          - name: ct_amt
+            meta: { classification: confidential }
+          - name: ct_name
+            meta: { classification: confidential }
 
       # ---------------- Archetype C ----------------
       - name: bronze_prospect
+        columns:
+          - name: lastname
+            meta: { classification: restricted_pii }
+          - name: firstname
+            meta: { classification: restricted_pii }
+          - name: middleinitial
+            meta: { classification: restricted_pii }
+          - name: addressline1
+            meta: { classification: restricted_pii }
+          - name: addressline2
+            meta: { classification: restricted_pii }
+          - name: postalcode
+            meta: { classification: restricted_pii }
+          - name: city
+            meta: { classification: restricted_pii }
+          - name: state
+            meta: { classification: restricted_pii }
+          - name: country
+            meta: { classification: restricted_pii }
+          - name: phone
+            meta: { classification: restricted_pii }
+          - name: gender
+            meta: { classification: restricted_pii }
+          - name: income
+            meta: { classification: confidential }
+          - name: creditrating
+            meta: { classification: confidential }
+          - name: networth
+            meta: { classification: confidential }
+          - name: employer
+            meta: { classification: confidential }
 
       # ---------------- Archetype D: FINWIRE ----------------
       - name: bronze_finwire_cmp
+        columns:
+          - name: companyname
+            meta: { classification: confidential }
+          - name: ceoname
+            meta: { classification: confidential }
+          - name: cik
+            meta: { classification: confidential }
       - name: bronze_finwire_sec
+        columns:
+          - name: dividend
+            meta: { classification: confidential }
       - name: bronze_finwire_fin
+        columns:
+          - name: revenue
+            meta: { classification: confidential }
+          - name: earnings
+            meta: { classification: confidential }
+          - name: eps
+            meta: { classification: confidential }
 
       # ---------------- Archetype D: CustomerMgmt.xml ----------------
       - name: bronze_mgmt_customer
+        columns:
+          - name: c_tax_id
+            meta: { classification: restricted_pii }
+          - name: c_l_name
+            meta: { classification: restricted_pii }
+          - name: c_f_name
+            meta: { classification: restricted_pii }
+          - name: c_m_name
+            meta: { classification: restricted_pii }
+          - name: c_gndr
+            meta: { classification: restricted_pii }
+          - name: c_dob
+            meta: { classification: restricted_pii }
+          - name: c_adline1
+            meta: { classification: restricted_pii }
+          - name: c_adline2
+            meta: { classification: restricted_pii }
+          - name: c_zipcode
+            meta: { classification: restricted_pii }
+          - name: c_city
+            meta: { classification: restricted_pii }
+          - name: c_state_prov
+            meta: { classification: restricted_pii }
+          - name: c_ctry
+            meta: { classification: restricted_pii }
+          - name: c_prim_email
+            meta: { classification: restricted_pii }
+          - name: c_alt_email
+            meta: { classification: restricted_pii }
+          - name: c_ctry_1
+            meta: { classification: restricted_pii }
+          - name: c_area_1
+            meta: { classification: restricted_pii }
+          - name: c_local_1
+            meta: { classification: restricted_pii }
+          - name: c_ext_1
+            meta: { classification: restricted_pii }
+          - name: c_ctry_2
+            meta: { classification: restricted_pii }
+          - name: c_area_2
+            meta: { classification: restricted_pii }
+          - name: c_local_2
+            meta: { classification: restricted_pii }
+          - name: c_ext_2
+            meta: { classification: restricted_pii }
+          - name: c_ctry_3
+            meta: { classification: restricted_pii }
+          - name: c_area_3
+            meta: { classification: restricted_pii }
+          - name: c_local_3
+            meta: { classification: restricted_pii }
+          - name: c_ext_3
+            meta: { classification: restricted_pii }
+          - name: c_tier
+            meta: { classification: confidential }
       - name: bronze_mgmt_account
+        columns:
+          - name: ca_name
+            meta: { classification: confidential }
 
       # ---------------- Archetype E ----------------
       - name: bronze_trade_history

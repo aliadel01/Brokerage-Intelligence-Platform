@@ -1,587 +1,1193 @@
 version: 2
 
 models:
-  # =========================================================================
-  # DIMENSION TABLES
+
+  # =========================================================================  
+  # GOLD LAYER MODELS
   # =========================================================================
 
   - name: dim_account
-    config:
-      contract:
-        enforced: true
     columns:
       - name: account_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: account_id
-        data_type: bigint
-        tests: [not_null]
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: account_name
-        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: tax_status
-        data_type: integer
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: account_status
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: broker_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: customer_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: effective_start_date
-        data_type: date
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: effective_end_date
-        data_type: date
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: is_current
-        data_type: boolean
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: cdc_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: dim_broker
-    config:
-      contract:
-        enforced: true
     columns:
       - name: broker_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: employee_id
-        data_type: bigint
-        tests: [not_null]
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: manager_employee_id
-        data_type: bigint
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: first_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: last_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: middle_initial
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: job_code
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: branch_name
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: office_code
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: phone_number
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
 
   - name: dim_company
-    config:
-      contract:
-        enforced: true
     columns:
       - name: company_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: company_cik
-        data_type: bigint
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: company_name
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: company_status
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: sp_rating
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: founding_date
-        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: address_line1
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: address_line2
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: postal_code
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: city
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: state_province
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: country
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: ceo_name
-        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: company_description
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: industry_code
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: industry_name
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: sector_id
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
 
   - name: dim_customer
-    config:
-      contract:
-        enforced: true
     columns:
       - name: customer_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: customer_id
-        data_type: bigint
-        tests: [not_null]
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: tax_id
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: customer_status
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: last_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: first_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: middle_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: gender
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: customer_tier
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: date_of_birth
-        data_type: date
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: address_line1
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: address_line2
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: postal_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: city
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: state_province
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: country
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone1_country_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone1_area_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone1_local_number
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone1_extension
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone2_country_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone2_area_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone2_local_number
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone2_extension
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone3_country_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone3_area_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone3_local_number
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone3_extension
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: primary_email
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: alternate_email
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: effective_start_date
-        data_type: date
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: effective_end_date
-        data_type: date
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: is_current
-        data_type: boolean
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: cdc_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: local_tax_rate_code
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: local_tax_rate_name
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: local_tax_rate_pct
-        data_type: numeric
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: national_tax_rate_code
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: national_tax_rate_name
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: national_tax_rate_pct
-        data_type: numeric
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: dim_date
-    config:
-      contract:
-        enforced: true
     columns:
       - name: date_sk
-        data_type: integer
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: date_value
-        data_type: date
-        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: date_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_year
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_year_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_qtr_id
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_qtr_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_month_id
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_month_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_week_id
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: calendar_week_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: day_of_week_num
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: day_of_week_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: fiscal_year
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: fiscal_year_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: fiscal_qtr_id
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: fiscal_qtr_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: is_holiday
-        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
 
   - name: dim_prospect
-    config:
-      contract:
-        enforced: true
     columns:
       - name: prospect_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: customer_sk
-        data_type: bigint
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: agency_id
-        data_type: varchar
-        tests: [not_null]
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: last_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: first_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: middle_initial
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: gender
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: address_line1
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: address_line2
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: postal_code
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: city
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: state
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: country
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: phone
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: annual_income
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: number_of_cars
-        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: number_of_children
-        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: marital_status
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: age
-        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: credit_rating
-        data_type: integer
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: own_or_rent_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: employer_name
-        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: number_of_credit_cards
-        data_type: integer
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: net_worth
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
 
   - name: dim_security
-    config:
-      contract:
-        enforced: true
     columns:
       - name: security_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: symbol
-        data_type: varchar
-        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: issue_type
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: security_status
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: security_name
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: exchange_id
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: shares_outstanding
-        data_type: bigint
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: first_trade_date
-        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: first_trade_exchange_date
-        data_type: date
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: dividend
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: company_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: dim_statustype
-    config:
-      contract:
-        enforced: true
     columns:
       - name: status_type_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: status_code
-        data_type: varchar
-        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: status_name
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
 
   - name: dim_time
-    config:
-      contract:
-        enforced: true
     columns:
       - name: time_sk
-        data_type: integer
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: time_value
-        data_type: time
-        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: hour_id
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: hour_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: minute_id
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: minute_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: second_id
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: second_desc
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: is_market_hours
-        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: is_office_hours
-        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
 
   - name: dim_tradetype
-    config:
-      contract:
-        enforced: true
     columns:
       - name: trade_type_sk
-        data_type: varchar
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: trade_type_code
-        data_type: varchar
-        tests: [not_null]
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: trade_type_name
-        data_type: varchar
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: is_sell_flag
-        data_type: boolean
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: is_market_order_flag
-        data_type: boolean
-
-  # =========================================================================
-  # FACT TABLES
-  # =========================================================================
+        config:
+          meta:
+            classification: public
+            pii: false
 
   - name: fact_cash_transaction
-    config:
-      contract:
-        enforced: true
     columns:
       - name: transaction_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: transaction_time_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: account_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: amount
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: description
-        data_type: varchar
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: cdc_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: cdc_dsn
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: batch_id
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: fact_company_financials
-    config:
-      contract:
-        enforced: true
     columns:
       - name: company_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: fiscal_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: fiscal_year
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: fiscal_quarter
-        data_type: integer
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: revenue
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: earnings
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: eps_basic
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: eps_diluted
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: profit_margin
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: inventory
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: total_assets
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: total_liabilities
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: shares_outstanding
-        data_type: bigint
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: diluted_shares_outstanding
-        data_type: bigint
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: batch_id
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: posting_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: fact_holding
-    config:
-      contract:
-        enforced: true
     columns:
       - name: originating_trade_id
-        data_type: bigint
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: current_trade_id
-        data_type: bigint
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: security_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: holding_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: account_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: before_quantity
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: after_quantity
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: cdc_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: cdc_dsn
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: batch_id
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: fact_market_history
-    config:
-      contract:
-        enforced: true
     columns:
       - name: security_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: market_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: close_price
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: high_price
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: low_price
-        data_type: numeric
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: volume
-        data_type: bigint
+        config:
+          meta:
+            classification: public
+            pii: false
       - name: cdc_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: cdc_dsn
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: batch_id
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: fact_trade
-    config:
-      contract:
-        enforced: true
     columns:
       - name: trade_sk
-        data_type: bigint
-        tests: [not_null, unique]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: trade_id
-        data_type: bigint
-        tests: [not_null]
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: security_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: trade_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: trade_time_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: status_type_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: trade_type_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: is_cash_flag
-        data_type: boolean
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: quantity
-        data_type: numeric
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: bid_price
-        data_type: numeric
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: account_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: executor_name
-        data_type: varchar
+        config:
+          meta:
+            classification: restricted_pii
+            pii: true
       - name: trade_price
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: charge_amount
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: commission_amount
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: tax_amount
-        data_type: numeric
+        config:
+          meta:
+            classification: confidential
+            pii: false
       - name: cdc_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: batch_id
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: fact_trade_history
-    config:
-      contract:
-        enforced: true
     columns:
       - name: trade_sk
-        data_type: bigint
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: trade_id
-        data_type: bigint
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: account_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: security_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: status_type_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: status_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: status_time_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: source_model
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: batch_id
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
 
   - name: fact_watch_history
-    config:
-      contract:
-        enforced: true
     columns:
       - name: customer_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: security_sk
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: watch_date_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: watch_time_sk
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: action_code
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: cdc_flag
-        data_type: varchar
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: cdc_dsn
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: batch_id
-        data_type: integer
+        config:
+          meta:
+            classification: internal
+            pii: false
