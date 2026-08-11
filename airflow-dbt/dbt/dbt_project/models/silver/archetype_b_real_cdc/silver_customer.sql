@@ -3,14 +3,10 @@
       - bronze_customer: real flat-file CDC, Batch2/3 onward.
       - bronze_mgmt_customer: CustomerMgmt.xml, Batch1/Historical Load only.
 
-    v4 -- grain changed back per user decision (04_silver.md decision
-    #17): GRAIN = one row per customer_id per _batch_id's LAST event,
+    GRAIN = one row per customer_id per day's LAST event,
     kept ONLY if it differs (on tracked columns) from the previous KEPT
-    batch's version. Business precision needed for customer/account is
-    "current state as of the day/batch", not intraday timestamp-level
-    tracking -- unlike Trade, which can change several times inside one
-    batch and needs true event-level versioning (see silver_trade.sql).
-
+    day's version. 
+    
     Sequence matters: forward-fill runs on EVERY individual event first
     (full ordering chain), THEN the per-batch collapse picks the last
     event of that batch -- collapsing first would discard values an
@@ -180,13 +176,14 @@ filled as (
     from deduped
 ),
 
--- THEN collapse to one row per (customer_id, _batch_id): the last event
--- of that batch, now carrying correctly forward-filled values.
-one_row_per_customer_per_batch as (
-    {{ dedup_latest('filled', 'customer_id, _batch_id', 'action_ts desc, _cdc_dsn desc, _loaded_at desc') }}
+
+one_row_per_day as (
+    select *
+    from filled
+    qualify row_number() over (partition by customer_id, _batch_id, action_ts::DATE  order by action_ts desc, _cdc_dsn desc, _loaded_at desc) = 1
 ),
 
--- Compare each batch's kept version against the PREVIOUS batch's version
+-- Compare each day's kept version against the PREVIOUS day's version
 -- on tracked columns only.
 changed_only as (
     select
@@ -200,7 +197,7 @@ changed_only as (
         lag(state_province) over (partition by customer_id order by _batch_id) as prev_state_province,
         lag(country)        over (partition by customer_id order by _batch_id) as prev_country,
         lag(primary_email)  over (partition by customer_id order by _batch_id) as prev_primary_email
-    from one_row_per_customer_per_batch
+    from one_row_per_day
 ),
 
 versions as (
@@ -234,7 +231,7 @@ final as (
 )
 
 select
-    {{ surrogate_key(['customer_id', '_batch_id']) }} as customer_version_sk,
+    {{ surrogate_key(['customer_id', '_batch_id', 'valid_from_date']) }} as customer_version_sk,
     customer_id,
     last_name,
     first_name,

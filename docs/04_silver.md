@@ -5,7 +5,6 @@
   - [Table of contents](#table-of-contents)
   - [Governing principle](#governing-principle)
   - [Strategies by archetype](#strategies-by-archetype)
-  - [Model classification table](#model-classification-table)
   - [Architecture Decision Records](#architecture-decision-records)
     - [ADR-001: Account/Customer](#adr-001-accountcustomer)
     - [ADR-002: Trade](#adr-002-trade)
@@ -39,38 +38,14 @@ partition_by, order_by)` macro — never an inline `qualify`.
 | Archetype | Sources | Strategy |
 |---|---|---|
 | A. Static/reference dimensions | Date, Time, StatusType, TaxRate, Industry, TradeType, HR | Pass-through + defensive dedup. No CDC, no history. |
-| B. Real CDC | Account, Customer | SCD2, batch-level grain. Account/Customer unify a flat-file source and an XML source. |
+| B. Real CDC | Account, Customer | SCD2, day-level grain. Account/Customer unify a flat-file source and an XML source. |
 | B. Real CDC (latest-state) | Trade | State-tracking dedup, one row per `trade_id`, latest wins — same shape as Prospect. Status-transition history is owned separately by `silver_trade_history` (see ADR-002). |
-| B. Quasi-CDC | HoldingHistory, WatchHistory, DailyMarket, CashTransaction | Append-only event log. `_cdc_flag`/`_cdc_dsn` kept for lineage only, never used for "latest wins". |
+| B. Quasi-CDC | HoldingHistory, WatchHistory, DailyMarket, CashTransaction | Append-only event log. |
 | C. Snapshot dimension | Prospect | SCD1, one row per `agency_id`, latest batch wins. |
 | D. FINWIRE | CMP, SEC, FIN | Append-only-by-PTS, Batch1 only. |
 | D. CustomerMgmt.xml | mgmt_customer, mgmt_account | Not modeled on their own. Folded into `silver_account`/`silver_customer`. |
 | E. Batch1-only fact (bronze), cross-batch model (silver) | TradeHistory | Bronze source is Batch1-only. The silver model, `silver_trade_history`, unions it with Batch2/3 status transitions derived from `bronze_trade`, covering the full trade lifecycle across every batch (see ADR-002). |
 
-## Model classification table
-
-| # | Bronze source(s) | Silver model | Key | Status |
-|---|---|---|---|---|
-| 1 | bronze_date | `silver_date` | `date_sk` | built |
-| 2 | bronze_time | `silver_time` | `time_sk` | built |
-| 3 | bronze_status_type | `silver_status_type` | `status_id` | built |
-| 4 | bronze_tax_rate | `silver_tax_rate` | `tax_rate_id` | built |
-| 5 | bronze_industry | `silver_industry` | `industry_id` | built |
-| 6 | bronze_trade_type | `silver_trade_type` | `trade_type_id` | built |
-| 7 | bronze_hr | `silver_hr` | `employee_id` | built |
-| 8 | bronze_prospect | `silver_prospect` | `agency_id` | built |
-| 9 | bronze_account + bronze_mgmt_account | `silver_account` | `account_id` per version | built |
-| 10 | bronze_customer + bronze_mgmt_customer | `silver_customer` | `customer_id` per version | built |
-| 11 | bronze_trade | `silver_trade` | `trade_id` (latest state) | built |
-| 12 | bronze_trade_history + bronze_trade (Batch2/3 only) | `silver_trade_history` | `trade_id, status_ts, status_id` | built |
-| 13 | bronze_holding_history | `silver_holding_history` | `_row_hash` | built |
-| 14 | bronze_watch_history | `silver_watch_history` | `_row_hash` | built |
-| 15 | bronze_daily_market | `silver_daily_market` | `_row_hash` | built |
-| 16 | bronze_cash_transaction | `silver_cash_transaction` | `_row_hash` | built |
-| 17 | bronze_finwire_cmp | `silver_finwire_company` | `cik, posting_ts` | built |
-| 18 | bronze_finwire_sec | `silver_finwire_security` | `security_symbol, posting_ts` | built |
-| 19 | bronze_finwire_fin | `silver_finwire_financials` | `coalesce(cik, name), year, quarter` | built |
-| — | bronze_batch_control, bronze_source_audit | — | operational, no silver model planned | — |
 
 ## Architecture Decision Records
 
@@ -79,10 +54,9 @@ partition_by, order_by)` macro — never an inline `qualify`.
 **Decision:**
 - **Sources unified:** flat-file CDC (`bronze_account`/`bronze_customer`)
   + XML (`bronze_mgmt_account`/`bronze_mgmt_customer`).
-- **Grain:** one row per entity per `_batch_id`. Keep the last event
-  inside that batch, and only if it differs from the previous kept
-  batch's version on tracked columns. *Reason: these entities change
-  slowly enough that daily precision is enough for the business.*
+- **Grain:** one row per entity per day. Keep the last event
+  inside that day, and only if it differs from the previous kept
+  day's version on tracked columns. *Reason: we only need final Account/Customer version per day.*
 - **XML actiontype → cdc_flag:** Account: `NEW→I, ADDACCT→U,
   CLOSEACCT→U, UPDACCT→U`. Customer: `NEW→I, UPDCUST→U, INACT→U`.
   *Reason: these values don't exist as real `actiontype`s — the true
@@ -111,8 +85,8 @@ partition_by, order_by)` macro — never an inline `qualify`.
   *Reason: the business needs history for identity/location/status, not
   for fields like phone numbers (delegated business call).*
 - **Forward-fill:** `LAST_VALUE(...) IGNORE NULLS`, run over every
-  individual event first (full chronological order) before the batch
-  collapses to its last row. *Reason: XML actions (e.g. `UPDACCT`) can
+  individual event first (full chronological order) before the day-level collapse
+ to its last row. *Reason: XML actions (e.g. `UPDACCT`) can
   send a partial payload. Collapsing before forward-filling was tried
   and caused a bug — an early event's value could miss the later, kept
   row.*
@@ -122,6 +96,9 @@ partition_by, order_by)` macro — never an inline `qualify`.
   same entity — without `action_ts`, those events tie and sort
   undefined. Safe only because a batch never mixes flat-file and XML
   rows (confirmed).*
+- **Surrogate key:** `surrogate_key(['account_id', '_batch_id', 'valid_from_date'])` and
+  `surrogate_key(['customer_id', '_batch_id', 'valid_from_date'])`. *Reason:
+  the day-level grain requires `valid_from_date`.*
 
 ### ADR-002: Trade
 **Status:** Accepted

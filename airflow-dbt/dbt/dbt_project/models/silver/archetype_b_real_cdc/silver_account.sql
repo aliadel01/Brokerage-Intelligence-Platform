@@ -3,14 +3,8 @@
       - bronze_account: real flat-file CDC, Batch2/3 onward.
       - bronze_mgmt_account: CustomerMgmt.xml, Batch1/Historical Load only.
 
-    v4 -- grain changed back per user decision (documented in
-    04_silver.md decision #17): GRAIN = one row per account_id per
-    _batch_id's LAST event, kept ONLY if it differs (on tracked columns)
-    from the previous KEPT batch's version. Reasoning: account/customer
-    change infrequently enough that batch-level (daily) granularity is
-    acceptable business precision -- unlike Trade, which can change
-    multiple times within one batch and needs true timestamp-level
-    versioning (see silver_trade.sql).
+    GRAIN = one row per account_id per day's LAST event, 
+    kept ONLY if it differs (on tracked columns) from the previous KEPT day's version. 
 
     Sequence matters here and was a real bug in an earlier draft:
     forward-fill must run on EVERY individual event first (full ordering
@@ -18,7 +12,7 @@
     batch -- collapsing first would have discarded values an earlier
     event in the same batch contributed before they got forward-filled.
 
-    Other decisions (full trail in silver_account_customer_decisions.md):
+    Other decisions (full trail in silver/account_customer_decisions.md):
       - actiontype -> cdc_flag: NEW -> I, ADDACCT/UPDACCT/CLOSEACCT -> U.
       - actiontype -> status_id: NEW/ADDACCT -> 'ACTV', UPDACCT -> NULL
         (forward-filled), CLOSEACCT -> 'INAC' (TPC-DI spec).
@@ -27,7 +21,7 @@
         tax_status (delegated column-selection decision).
       - action_ts NULL for flat-CDC rows, populated for XML rows -- safe
         under Snowflake's NULL-sort default only because a batch never
-        mixes both sources (see decision #12).
+        mixes both sources.
 -#}
 
 with bronze_flat as (
@@ -46,7 +40,7 @@ with bronze_flat as (
         _loaded_at,
         'bronze_account'                                    as _source_table
     from {{ source('bronze', 'bronze_account') }}
-    where ca_id is not null and ca_id = '1661' 
+    where ca_id is not null
 ),
 
 bronze_xml as (
@@ -73,7 +67,7 @@ bronze_xml as (
         _loaded_at,
         'bronze_mgmt_account'                                as _source_table
     from {{ source('bronze', 'bronze_mgmt_account') }}
-    where ca_id is not null and ca_id = '1661' 
+    where ca_id is not null
 ),
 
 unioned as (
@@ -104,20 +98,20 @@ filled as (
     from deduped
 ),
 
--- THEN collapse to one row per (account_id, _batch_id): the last event of
--- that batch, now carrying correctly forward-filled values.
-one_row_per_account_per_batch as (
-    {{ dedup_latest('filled', 'account_id, _batch_id', 'action_ts desc, _cdc_dsn desc, _loaded_at desc') }}
+one_row_per_day as (
+    select *
+    from filled
+    qualify row_number() over (partition by account_id, _batch_id, action_ts::DATE  order by action_ts desc, _cdc_dsn desc, _loaded_at desc) = 1
 ),
 
--- Compare each batch's kept version against the PREVIOUS batch's version
+-- Compare each day's kept version against the PREVIOUS day's version
 -- on tracked columns only.
 changed_only as (
     select
         *,
         lag(status_id)    over (partition by account_id order by _batch_id) as prev_status_id,
         lag(account_name) over (partition by account_id order by _batch_id) as prev_account_name
-    from one_row_per_account_per_batch
+    from one_row_per_day
 ),
 
 versions as (
@@ -148,7 +142,7 @@ final as (
 )
 
 select
-    {{ surrogate_key(['account_id', '_batch_id']) }} as account_version_sk,
+    {{ surrogate_key(['account_id', '_batch_id', 'valid_from_date']) }} as account_version_sk,
     account_id,
     broker_id,
     customer_id,
