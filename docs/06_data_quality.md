@@ -118,6 +118,9 @@ A loader can run "successfully" and still have silently dropped or duplicated ro
 ### Problem 9 — DQ-as-Control on Ingestion
 You can see the full documentation of this phase in `07_governance.md` — `DQ-as-Control on Ingestion` section.
 
+### Data Freshness
+Standardizes ingestion monitoring via dbt source freshness using a 24-hour warning threshold on _loaded_at for incremental tables (Batch 2 & 3), while explicitly omitting static historical tables (Batch 1) to eliminate false positives.
+
 ### Metadata backbone
 Every row in every bronze table carries: `_batch_id`, `_source_file`, `_loaded_at`, `_row_hash`, `_dq_errors`. Together these give us **lineage** (where a row came from), **dedup/QA** (`_row_hash` — is this row identical to one we've seen before), and **traceability** (`_dq_errors` — exactly what was dirty about this row and why).
 
@@ -136,11 +139,62 @@ Every row in every bronze table carries: `_batch_id`, `_source_file`, `_loaded_a
 -  **Determinism & Lineage**: Enforced deterministic processing via an explicit composite ordering key (_batch_id, action_ts, _cdc_dsn, _loaded_at) to break ties and guarantee idempotent pipeline execution. Implemented explicit lineage tracking using a _source_model column rather than relying on implicit assumptions like checking _batch_id = 1.
 ### 1. dbt generic tests & Referential integrity
 Implemented core dbt testing across the Silver layer using `not_null`, `unique`, `unique_combination_of_columns`, and `accepted_values` for schema and metadata integrity. Configured `relationships` tests on key dependencies (`silver_trade`, `silver_account`, `silver_holding_history`, `silver_trade_history`) with severities set to **warn** instead of **error** to log orphan records without breaking the pipeline.
+
+- Each silver model has a PK which it can be Business Primary Key, Surrogate Key, _row_hash or Composite Key. The PK is enforced via `unique` and `not_null` tests.
+
 ### 2. SCD2-specific checks (account/customer)
 - `assert_scd2_active_flag_integrity`: Validates SCD Type 2 active flag integrity, asserting that each entity key (account_id / customer_id) resolves to exactly one record with is_current = true.
 - `assert_no_overlapping_date_ranges`: Guarantees SCD Type 2 timeline boundary validity, flagging any record where valid_from_date overlaps with the preceding version's valid_to_date.
 - `assert_scd2_date_continuity`: Enforces strict date chain continuity between adjacent state versions, verifying that $valid\_to\_date_{N} = valid\_from\_date_{N+1} - 1\text{ day}$ with zero gaps.
 - `assert_forward_fill_sanity`: Verifies CDC attribute propagation consistency, ensuring tracked business columns do not regression-drop to NULL across versions once initially populated.
+
+### 3. Reconciliation — bronze row count vs. silver row count
+
+**Problem:** dedup, collapse, and filter logic inside silver models
+(`dedup_latest`, SCD2 day-collapse, `where t_id is not null`, etc.) can
+silently drop more or fewer rows than intended. No test in `04_silver.md`
+catches a dedup step that ate too much — or too little.
+
+**How we handle it:** `run_silver_reconciliation_checks()`
+(`macros/run_silver_reconciliation_checks.sql`) runs on every `dbt build`
+via `on-run-end`. Per silver model, it compares bronze row count against
+silver row count **per `_batch_id`**, and logs one row per batch into
+`governance.dq_audit_log` — same table, same pattern as the ingestion-layer
+reconciliation check (`06_data_quality.md` Problem 8, `07_governance.md`
+DQ-as-Control).
+
+- `check_type = 'silver_reconciliation'`
+- `severity = 'PASS'` if delta within threshold, else `'WARNING'` —
+  **never fatal**, same reasoning as bronze reconciliation: a mismatch may
+  be expected behavior (dedup, day-collapse), not a bug, so a human
+  reviews it rather than the build failing automatically.
+- Threshold is **per model**, not global, because expected delta varies
+  hugely by archetype:
+
+| Model type | Example | Threshold | Why |
+|---|---|---|---|
+| Archetype A pass-through | `silver_hr` | 1% | Should be near-exact 1:1 |
+| Quasi-CDC append-only | `silver_holding_history` etc. | 2% | Only exact-dupe rows drop |
+| Prospect (SCD1 snapshot) | `silver_prospect` | 10% | Intra-batch dupes collapse |
+| Trade history (dual union, batch1 excluded from one side) | `silver_trade_history` | 30% | Structural, filtered union |
+| Account / Customer (dual-source, day-collapse, tracked-col filter) | `silver_account`, `silver_customer` | 50% | Heavy collapse by design |
+| Trade (many events -> 1 row per `trade_id`) | `silver_trade` | 80% | Collapse is the entire point of the model |
+
+> [!NOTE]
+> These thresholds are starting defaults, not confirmed business
+> requirements — nobody has specified an official "acceptable delta %"
+> yet. Revisit once real batch volumes are known; a fixed % can hide a
+> real problem at high volume or false-alarm at low volume. Until then,
+> `dq_audit_log` keeps every raw count queryable regardless of threshold,
+> so nothing is lost even if a threshold turns out wrong.
+
+`governance.dq_audit_log` already exists in prod (created by the
+ingestion-layer `log_dq_event()` — see `07_governance.md`); no new DDL
+needed for this check.
+
+**Code reference:** `macros/log_silver_reconciliation.sql` (generic
+logger), `macros/run_silver_reconciliation_checks.sql` (per-model calls),
+wired via `on-run-end` in `dbt_project.yml`.
 
  
 ## Gold Layer

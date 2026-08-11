@@ -15,6 +15,14 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
+# Configuring the "on-run-end" hook to run reconciliation checks after dbt finishes running models.
+on-run-end:
+  - "{{ run_silver_reconciliation_checks() }}"
+
+# setting a default variable for the reconciliation threshold percentage.
+vars:
+  reconciliation_threshold_pct: 5
+
 clean-targets:
   - "target"
   - "dbt_packages"
