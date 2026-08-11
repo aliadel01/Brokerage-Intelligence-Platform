@@ -65,6 +65,8 @@ Four levels are used, in ascending sensitivity:
 | `confidential` | Business-sensitive, SOX-relevant | trade prices, account IDs, company financials |
 | `restricted_pii` | Personal data, GDPR-relevant | customer name, tax ID, address, phone, email, DOB |
 
+Also we added a description to each model in the `_silver__models.yml` and `_gold__models.yml` files, so that when you run `dbt docs generate`, the documentation will show the classification of each column next to its definition.
+
 ### Enforcement — the Snowflake tag is the source of truth
 
 ```sql

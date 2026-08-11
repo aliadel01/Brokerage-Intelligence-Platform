@@ -6,6 +6,7 @@ models:
   # =========================================================================
 
   - name: silver_date
+    description: "Conforms date dimension data containing calendar and fiscal hierarchy metrics (years, quarters, months, weeks) along with holiday flags for temporal analysis."
     config:
       contract:
         enforced: true
@@ -134,6 +135,7 @@ models:
             pii: false
 
   - name: silver_hr
+    description: "Stores internal employee organizational structures and human resource records, including manager hierarchies, assigned branches, and employee contact details."
     config:
       contract:
         enforced: true
@@ -209,6 +211,7 @@ models:
             pii: false
 
   - name: silver_industry
+    description: "Reference dataset mapping specific industry categorizations to broader sector identifiers."
     config:
       contract:
         enforced: true
@@ -246,6 +249,7 @@ models:
             pii: false
 
   - name: silver_status_type
+    description: "Look-up table containing normalized status definitions used across trades, customer accounts, and system operations."
     config:
       contract:
         enforced: true
@@ -277,6 +281,7 @@ models:
             pii: false
 
   - name: silver_tax_rate
+    description: "Reference table defining applicable tax rate schedules, names, and percentage values."
     config:
       contract:
         enforced: true
@@ -316,6 +321,7 @@ models:
             pii: false
 
   - name: silver_time
+    description: "Conforms time-of-day dimension data down to the second level, including market trading hours and office hours indicator flags."
     config:
       contract:
         enforced: true
@@ -395,6 +401,7 @@ models:
             pii: false
 
   - name: silver_trade_type
+    description: "Reference model defining trading operation categories, including order type attributes like market orders and sell orders."
     config:
       contract:
         enforced: true
@@ -438,6 +445,7 @@ models:
             pii: false
 
   - name: silver_prospect
+    description: "Contains prospective client demographic, geographic, and financial profiles (income, credit rating, net worth) for marketing and acquisition tracking."
     config:
       contract:
         enforced: true
@@ -583,6 +591,7 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
+        tests: [not_null, unique]
         config:
           meta:
             classification: internal
@@ -595,6 +604,7 @@ models:
             pii: false
 
   - name: silver_account
+    description: "Tracks customer brokerage account entities with Type 2 Slowly Changing Dimension (SCD Type 2) tracking and associations to managing brokers."
     config:
       contract:
         enforced: true
@@ -699,6 +709,7 @@ models:
             pii: false
 
   - name: silver_customer
+    description: "Stores core customer profile information with full SCD Type 2 history tracking, capturing demographic changes, contact updates, and tax identification mappings over time."
     config:
       contract:
         enforced: true
@@ -949,6 +960,7 @@ models:
             pii: false
 
   - name: silver_trade
+    description: "Represents core order executions, recording transaction volumes, trade prices, commissions, bid prices, and execution fees."
     config:
       contract:
         enforced: true
@@ -992,12 +1004,16 @@ models:
             pii: false
       - name: quantity
         data_type: numeric
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
         config:
           meta:
             classification: internal
             pii: false
       - name: bid_price
         data_type: numeric
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
         config:
           meta:
             classification: internal
@@ -1019,24 +1035,32 @@ models:
             pii: true
       - name: trade_price
         data_type: numeric
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
         config:
           meta:
             classification: confidential
             pii: false
       - name: charge
         data_type: numeric
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
         config:
           meta:
             classification: confidential
             pii: false
       - name: commission
         data_type: numeric
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
         config:
           meta:
             classification: confidential
             pii: false
       - name: tax
         data_type: numeric
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
         config:
           meta:
             classification: confidential
@@ -1064,9 +1088,13 @@ models:
             pii: false
 
   - name: silver_finwire_cmp
+    description: "Processes financial wire records containing public corporate entity details, SEC Central Index Key (CIK) mappings, credit ratings, and headquarters locations."
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [posting_ts, cik]
     columns:
       - name: posting_ts
         data_type: timestamp_ntz
@@ -1182,9 +1210,13 @@ models:
             pii: false
 
   - name: silver_finwire_sec
+    description: "Ingests security-level financial wire feeds, maintaining issue types, exchange references, outstanding shares, and security symbols."
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [posting_ts, security_symbol]
     columns:
       - name: posting_ts
         data_type: timestamp_ntz
@@ -1280,6 +1312,7 @@ models:
             pii: false
 
   - name: silver_cash_transaction
+    description: "Tracks monetary movements (deposits, withdrawals, and balance adjustments) linked to customer accounts over time."
     config:
       contract:
         enforced: true
@@ -1345,9 +1378,13 @@ models:
             pii: false
 
   - name: silver_daily_market
+    description: "Captures daily end-of-day market pricing, tracking high, low, close prices, and trading volume per security symbol."
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [market_date, security_symbol]
     columns:
       - name: market_date
         data_type: date
@@ -1422,6 +1459,7 @@ models:
             pii: false
 
   - name: silver_holding_history
+    description: "Audit log tracking share quantity changes (qty_before and qty_after) for security positions triggered by executed trade events."
     config:
       contract:
         enforced: true
@@ -1486,6 +1524,7 @@ models:
             pii: false
 
   - name: silver_watch_history
+    description: "Records customer interactions with security watchlists, capturing tracking activations and cancellations over time."
     config:
       contract:
         enforced: true
@@ -1552,9 +1591,13 @@ models:
             pii: false
 
   - name: silver_finwire_fin
+    description: "Extracts quarterly financial statements and corporate earnings data (revenue, EPS, liabilities, assets, margin) from financial wire sources."
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [posting_ts, company_cik]
     columns:
       - name: posting_ts
         data_type: timestamp_ntz
@@ -1656,6 +1699,7 @@ models:
       - name: company_cik
         data_type: varchar
         tests:
+          - not_null
           - relationships: {to: ref('silver_finwire_cmp'), field: cik, config: {severity: warn}}
         config:
           meta:
@@ -1669,6 +1713,7 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
+        tests: [not_null, unique]
         config:
           meta:
             classification: internal
@@ -1681,6 +1726,7 @@ models:
             pii: false
 
   - name: silver_trade_history
+    description: "Audit log capturing state transitions and lifecycle status changes for trades across execution timestamps."
     config:
       contract:
         enforced: true
@@ -1719,6 +1765,7 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
+        tests: [not_null, unique]
         config:
           meta:
             classification: internal
