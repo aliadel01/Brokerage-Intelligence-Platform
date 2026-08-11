@@ -598,6 +598,9 @@ models:
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [account_id, _batch_id, valid_from_date]
     columns:
       - name: account_version_sk
         data_type: varchar
@@ -616,6 +619,7 @@ models:
       - name: broker_id
         data_type: integer
         tests:
+          - not_null
           - relationships: {to: ref('silver_hr'), field: employee_id, config: {severity: warn}}
         config:
           meta:
@@ -624,6 +628,7 @@ models:
       - name: customer_id
         data_type: integer
         tests:
+          - not_null
           - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
         config:
           meta:
@@ -643,12 +648,16 @@ models:
             pii: false
       - name: status_id
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
         config:
           meta:
             classification: internal
             pii: false
       - name: cdc_flag
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['I', 'U'], config: {severity: warn}}
         config:
           meta:
             classification: internal
@@ -682,6 +691,8 @@ models:
             pii: false
       - name: _source_table
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['bronze_account', 'bronze_mgmt_account'], config: {severity: warn}}
         config:
           meta:
             classification: internal
@@ -691,6 +702,9 @@ models:
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [customer_id, _batch_id, valid_from_date]
     columns:
       - name: customer_version_sk
         data_type: varchar
@@ -884,12 +898,16 @@ models:
             pii: true
       - name: status_id
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
         config:
           meta:
             classification: internal
             pii: false
       - name: cdc_flag
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['I', 'U'], config: {severity: warn}}
         config:
           meta:
             classification: internal
@@ -923,6 +941,8 @@ models:
             pii: false
       - name: _source_table
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['bronze_customer', 'bronze_mgmt_customer'], config: {severity: warn}}
         config:
           meta:
             classification: internal
@@ -943,6 +963,7 @@ models:
       - name: status_id
         data_type: varchar
         tests:
+          - not_null
           - relationships: {to: ref('silver_status_type'), field: status_id, config: {severity: warn}}
         config:
           meta:
@@ -951,6 +972,7 @@ models:
       - name: trade_type_id
         data_type: varchar
         tests:
+          - not_null
           - relationships: {to: ref('silver_trade_type'), field: trade_type_id, config: {severity: warn}}
         config:
           meta:
@@ -983,6 +1005,7 @@ models:
       - name: customer_account_id
         data_type: integer
         tests:
+          - not_null
           - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
         config:
           meta:
@@ -1020,6 +1043,8 @@ models:
             pii: false
       - name: cdc_flag
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['I', 'U'], config: {severity: warn}}
         config:
           meta:
             classification: internal
@@ -1436,9 +1461,10 @@ models:
             pii: false
       - name: _cdc_dsn
         data_type: integer
-        meta:
-          classification: internal
-          pii: false
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: _batch_id
         data_type: integer
         config:
@@ -1488,7 +1514,7 @@ models:
       - name: watch_action
         data_type: varchar
         tests:
-          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
+          - accepted_values: {values: ['ACTV', 'CNCL'], config: {severity: warn}}
         config:
           meta:
             classification: internal
@@ -1658,6 +1684,9 @@ models:
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [trade_id, status_ts, status_id]
     columns:
       - name: trade_id
         data_type: integer
@@ -1702,6 +1731,8 @@ models:
             pii: false
       - name: _source_model
         data_type: varchar
+        tests:
+          - accepted_values: {values: ['bronze_trade_history', 'bronze_trade'], config: {severity: warn}}
         config:
           meta:
             classification: internal

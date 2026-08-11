@@ -126,5 +126,21 @@ Every row in every bronze table carries: `_batch_id`, `_source_file`, `_loaded_a
 
 ## Silver Layer
 
+### 0. These points are covered in detail in `04_silver.md`, but here is a summary.
+- **Deduplication & Uniqueness**: Standardized deduplication logic using a unified dedup_latest macro. Implemented two core strategies: State-tracking to keep the latest entity state (e.g., silver_trade), and Append-only to eliminate exact duplicate records while retaining distinct version events (e.g., silver_account, silver_customer). Resolves dual-source overlap to prevent data multiplication.  
+- **Data Completeness & Forward-Fill**: Handles partial CDC payloads using LAST_VALUE(...) IGNORE NULLS windowing. Executes forward-fill across the full chronological event sequence prior to the daily collapse step, preventing historical attributes from reverting to NULL during aggregation.  
 
+- **Standardization & Semantic Consistency**: Unifies heterogeneous source vocabularies (flat-file CDC and XML) into standardized domains (e.g., mapping status_id to 'ACTV'/'INAC' and cdc_flag to 'I'/'U'). Filters non-entity noise events to maintain clean downstream structures. 
+
+- **Data Integrity & Fan Trap Prevention**: Decoupled current state from lifecycle transitions (ADR-002) by splitting Trade into silver_trade (latest state) and silver_trade_history (transition history). Structurally prevents Kimball Fan Traps in the Gold layer, avoiding false multiplication of financial metrics (e.g., SUM(commission)) during aggregation.
+-  **Determinism & Lineage**: Enforced deterministic processing via an explicit composite ordering key (_batch_id, action_ts, _cdc_dsn, _loaded_at) to break ties and guarantee idempotent pipeline execution. Implemented explicit lineage tracking using a _source_model column rather than relying on implicit assumptions like checking _batch_id = 1.
+### 1. dbt generic tests & Referential integrity
+Implemented core dbt testing across the Silver layer using `not_null`, `unique`, `unique_combination_of_columns`, and `accepted_values` for schema and metadata integrity. Configured `relationships` tests on key dependencies (`silver_trade`, `silver_account`, `silver_holding_history`, `silver_trade_history`) with severities set to **warn** instead of **error** to log orphan records without breaking the pipeline.
+### 2. SCD2-specific checks (account/customer)
+- `assert_scd2_active_flag_integrity`: Validates SCD Type 2 active flag integrity, asserting that each entity key (account_id / customer_id) resolves to exactly one record with is_current = true.
+- `assert_no_overlapping_date_ranges`: Guarantees SCD Type 2 timeline boundary validity, flagging any record where valid_from_date overlaps with the preceding version's valid_to_date.
+- `assert_scd2_date_continuity`: Enforces strict date chain continuity between adjacent state versions, verifying that $valid\_to\_date_{N} = valid\_from\_date_{N+1} - 1\text{ day}$ with zero gaps.
+- `assert_forward_fill_sanity`: Verifies CDC attribute propagation consistency, ensuring tracked business columns do not regression-drop to NULL across versions once initially populated.
+
+ 
 ## Gold Layer
