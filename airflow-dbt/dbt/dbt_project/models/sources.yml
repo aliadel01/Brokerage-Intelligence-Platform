@@ -18,7 +18,7 @@ sources:
 
     tables:
 
-      # ---------------- Archetype A ----------------
+      # ---------------- Archetype A (Historical Only) ----------------
       - name: bronze_date
       - name: bronze_time
       - name: bronze_status_type
@@ -36,14 +36,20 @@ sources:
           - name: employeephone
             meta: { classification: restricted_pii }
 
-      # ---------------- Archetype B: real CDC ----------------
+      # ---------------- Archetype B: real CDC (Incremental) ----------------
       - name: bronze_account
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
         columns:
           - name: ca_id
             meta: { classification: confidential }
           - name: ca_name
             meta: { classification: confidential }
       - name: bronze_customer
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
         columns:
           - name: c_tax_id
             meta: { classification: restricted_pii }
@@ -100,6 +106,9 @@ sources:
           - name: c_tier
             meta: { classification: confidential }
       - name: bronze_trade
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
         columns:
           - name: t_exec_name
             meta: { classification: restricted_pii }
@@ -114,19 +123,34 @@ sources:
           - name: t_tax
             meta: { classification: confidential }
 
-      # ---------------- Archetype B: quasi-CDC ----------------
+      # ---------------- Archetype B: quasi-CDC (Incremental) ----------------
       - name: bronze_holding_history
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
       - name: bronze_watch_history
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
       - name: bronze_daily_market
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
       - name: bronze_cash_transaction
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
         columns:
           - name: ct_amt
             meta: { classification: confidential }
           - name: ct_name
             meta: { classification: confidential }
 
-      # ---------------- Archetype C ----------------
+      # ---------------- Archetype C (Incremental Re-extract) ----------------
       - name: bronze_prospect
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
         columns:
           - name: lastname
             meta: { classification: restricted_pii }
@@ -159,7 +183,7 @@ sources:
           - name: employer
             meta: { classification: confidential }
 
-      # ---------------- Archetype D: FINWIRE ----------------
+      # ---------------- Archetype D: FINWIRE (Historical Only) ----------------
       - name: bronze_finwire_cmp
         columns:
           - name: companyname
@@ -181,7 +205,7 @@ sources:
           - name: eps
             meta: { classification: confidential }
 
-      # ---------------- Archetype D: CustomerMgmt.xml ----------------
+      # ---------------- Archetype D: CustomerMgmt.xml (Historical Only) ----------------
       - name: bronze_mgmt_customer
         columns:
           - name: c_tax_id
@@ -243,9 +267,15 @@ sources:
           - name: ca_name
             meta: { classification: confidential }
 
-      # ---------------- Archetype E ----------------
+      # ---------------- Archetype E (Historical Only) ----------------
       - name: bronze_trade_history
 
-      # ---------------- Operational / control ----------------
+      # ---------------- Operational / control (Incremental) ----------------
       - name: bronze_batch_control
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
       - name: bronze_source_audit
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 24, period: hour}
