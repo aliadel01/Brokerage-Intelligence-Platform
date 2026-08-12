@@ -188,15 +188,15 @@ one_row_per_day as (
 changed_only as (
     select
         *,
-        lag(status_id)      over (partition by customer_id order by _batch_id) as prev_status_id,
-        lag(last_name)      over (partition by customer_id order by _batch_id) as prev_last_name,
-        lag(first_name)     over (partition by customer_id order by _batch_id) as prev_first_name,
-        lag(tier)           over (partition by customer_id order by _batch_id) as prev_tier,
-        lag(address_line1)  over (partition by customer_id order by _batch_id) as prev_address_line1,
-        lag(city)           over (partition by customer_id order by _batch_id) as prev_city,
-        lag(state_province) over (partition by customer_id order by _batch_id) as prev_state_province,
-        lag(country)        over (partition by customer_id order by _batch_id) as prev_country,
-        lag(primary_email)  over (partition by customer_id order by _batch_id) as prev_primary_email
+        lag(status_id)      over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_status_id,
+        lag(last_name)      over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_last_name,
+        lag(first_name)     over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_first_name,
+        lag(tier)           over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_tier,
+        lag(address_line1)  over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_address_line1,
+        lag(city)           over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_city,
+        lag(state_province) over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_state_province,
+        lag(country)        over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_country,
+        lag(primary_email)  over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_primary_email
     from one_row_per_day
 ),
 

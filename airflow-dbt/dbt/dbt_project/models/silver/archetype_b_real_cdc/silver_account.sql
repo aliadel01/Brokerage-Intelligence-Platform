@@ -109,8 +109,8 @@ one_row_per_day as (
 changed_only as (
     select
         *,
-        lag(status_id)    over (partition by account_id order by _batch_id) as prev_status_id,
-        lag(account_name) over (partition by account_id order by _batch_id) as prev_account_name
+        lag(status_id)    over (partition by account_id order by _batch_id, action_ts, _cdc_dsn, _loaded_at) as prev_status_id,
+        lag(account_name) over (partition by account_id order by _batch_id, action_ts, _cdc_dsn, _loaded_at) as prev_account_name
     from one_row_per_day
 ),
 
