@@ -39,3 +39,21 @@ create table if not exists governance.dbt_test_results (
     message         varchar,                   -- dbt's own failure message
     _loaded_at           TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3)
     );
+
+-- ---------------------------------------------------------------------------
+-- Erasure log — structured record of all erasure requests and their status.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE governance.erasure_log (
+    erasure_id      NUMBER AUTOINCREMENT,
+    customer_id     NUMBER NOT NULL,
+    requested_at    TIMESTAMP_NTZ NOT NULL,
+    erased_at       TIMESTAMP_NTZ,
+    reason          VARCHAR(500),
+    status          VARCHAR(50) NOT NULL,
+    affected_layers VARCHAR(500),
+    requested_by    VARCHAR(255),
+    notes           VARCHAR(1000),
+
+    CONSTRAINT pk_erasure_log PRIMARY KEY (erasure_id)
+);

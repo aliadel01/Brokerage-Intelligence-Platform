@@ -8,8 +8,9 @@ This document outlines the governance, compliance, and ownership practices for t
   3. [Data Classification](#data-classification)
   4. [PII Masking Policies](#pii-masking-policies)
   5. [DQ-as-Control on Ingestion](#dq-as-control-on-ingestion)
-  6. [Open items](#open-items)
-
+  6. [Retention & Erasure](#retention--erasure)
+  7. [Historical Reconstruction and Access Auditing](#historical-reconstruction-and-access-auditing)
+  8. [Regulatory Mapping](#regulatory-mapping)
 
 ## Roles & Access Control
 
@@ -291,7 +292,44 @@ must not silently disappear.
       ...
   ```
 
+## Retention & Erasure  
 
+### Erasure requests
+Built `erasure_log` table to track erasure requests and actions. This is a permanent record of what was erased, when, and by whom. The table includes the following columns:
+
+- `erasure_id`: Unique identifier for each erasure request.
+- `customer_id`: Identifier for the customer whose data is being erased.
+- `requested_at`: Timestamp when the erasure request was made.
+- `erased_at`: Timestamp when the data was actually erased.
+- `reason`: Reason for the erasure request.
+- `status`: Current status of the erasure request.
+- `affected_layers`: Layers of the data that are affected by the erasure.
+- `requested_by`: Person or system that requested the erasure.
+- `notes`: Additional notes about the erasure request.
+
+When an erasure request is processed:
+the system will make the PII columns `NULL` in the affected layers and log the action in the `erasure_log` table. We will not delete the rows themselves because this would break referential integrity and historical reconstruction. Instead, we will nullify the PII columns and log the action in the `erasure_log` table.
+
+**Code Example**: we will do that in each layer with a query like the following:
+```sql
+UPDATE silver_customer
+SET
+    email = NULL,
+    phone = NULL,
+    tax_id = NULL,
+    ...
+WHERE customer_id = 123;
+```
+
+### Retention Policy
+Raw PII is retained for 90 days to support recovery, debugging, and controlled reprocessing.
+This limits unnecessary long-term exposure while providing a reasonable operational recovery window.
+
+**Code Example**:
+```sql
+ALTER TABLE bronze_customer
+SET DATA_RETENTION_TIME_IN_DAYS = 90;
+```
 ### Reconciliation check — full audit artifact
 
 Existing reconciliation query (audit file `RowCount` vs actual bronze rows
@@ -347,3 +385,10 @@ DQ evidence in a log stream nobody archives, and keeps row-level cast
 errors traveling with the row itself rather than off in a separate table
 that would need a join to reconstruct which row was dirty.
  
+## Regulatory Mapping
+- **SOX-style**: apply to trade/balance data — `fact_trade`, `fact_trade_history`, `silver_trade`. Control need: integrity + audit trail + no double-count risk on financial measure (commission, balance). ADR-002/ADR-009 split (silver+gold) exist for this exact reason — one row latest state, one row full status lineage — stop fan-trap where `SUM(commission)` multiply by transition count. `_row_hash`, `_batch_id`, `_cdc_dsn` ordering give traceable lineage: auditor can reconstruct "what value, when, from what source event." SOX-style control here = financial reporting accuracy + immutable audit trail, not raw storage security.
+
+- **GDPR-style**: apply to customer PII — `silver_customer`/`dim_customer`. Holds name, address, email, DOB, tax_id, phone. SCD2 (ADR-001, day-grain, tracked columns include name/address/email) mean history kept forever by design — direct tension vs GDPR erasure right + data minimization. Carried-only fields (phone, DOB, tax_id) still land in table even though not "tracked" for versioning — still personal data, still in scope. Control need: retention policy + deletion/anonymization procedure on SCD2 history, access control on PII columns, and lawful-basis documentation for why full history kept (business need: identity/location/status audit — spec says so).
+
+- **PCI-DSS**: not apply. No PAN, card number, CVV, expiry field anywhere in dictionary or model — `CashTransaction`/`fact_cashtransaction` carry amount + type only, no payment-instrument detail. Whole pipeline (bronze→silver→gold) never receive cardholder data, so PCI-DSS scope = zero. Correct answer for "why not" question — not "we're careless," but "data never enters system," which is the actual PCI scoping question interviewers check.
+
