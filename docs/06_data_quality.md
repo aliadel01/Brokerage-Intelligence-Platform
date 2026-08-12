@@ -197,4 +197,42 @@ logger), `macros/run_silver_reconciliation_checks.sql` (per-model calls),
 wired via `on-run-end` in `dbt_project.yml`.
 
  
+### 4. Business-rule tests (custom singular tests)
+
+#### Problem 1 — Illegal trade status state transitions
+
+A trade moves through a deterministic lifecycle via a state machine (e.g., Pending $\rightarrow$ Submitted $\rightarrow$ Completed). Race conditions in event processing or upstream source corruption can ingest impossible state jumps (e.g., `CMPT` before `SBMT`, or transitioning out of `CMPT` back to `PNDG`), corrupting `silver_trade_history` and downstream financial metrics.
+
+**How we handle it:**
+
+* `assert_trade_status_order.sql` evaluates consecutive status pairs per `trade_id` ordered chronologically using `LAG()`.
+* Transitions are validated against an explicit whitelist of legal TPC-DI state pairs:
+* `('PNDG','SBMT')`, `('PNDG','CANC')`
+* `('SBMT','CMPT')`, `('SBMT','CANC')`
+* `('CMPT','INAC')`, `('CANC','INAC')`
+
+
+* Any record where `prev_status_id IS NOT NULL` and the transition pair `(prev_status_id, status_id)` is not in the whitelist is returned as an invalid transition error.
+
+**Code reference:** `tests/silver_trade_history/assert_trade_status_order.sql`.
+
+#### Problem 2 — False versioning in tracked SCD Type 2 entities
+
+When updating `silver_account` or `silver_customer`, flaws in incremental merge or day-collapse logic can generate a new row version even when none of the explicitly tracked business attributes have changed (e.g., triggered by irrelevant metadata fields or redundant batch re-runs). This creates "false versions," inflating table size and skewing temporal reporting.
+
+**How we handle it:**
+
+* `assert_account_versions_only_on_tracked_change.sql` and `assert_customer_versions_only_on_tracked_change.sql` compare adjacent entity states using `LAG()` ordered by the deterministic key sequence `(_batch_id, action_ts, _cdc_dsn, _loaded_at)`.
+* The tests verify that a new version exists **if and only if** at least one tracked business column has changed:
+* **Account tracked columns:** `status_id`, `account_name`.
+* **Customer tracked columns:** `status_id`, `last_name`, `first_name`, `tier`, `address_line1`, `city`, `state_province`, `country`, `primary_email`.
+
+
+* Evaluating `(current_cols) IS NOT DISTINCT FROM (prev_cols)` catches rows where a version was spawned without a tracked attribute change, failing the build immediately.
+
+**Code reference:**
+
+`tests/silver_account/assert_account_versions_only_on_tracked_change.sql`
+`tests/silver_customer/assert_customer_versions_only_on_tracked_change.sql`.
+
 ## Gold Layer
