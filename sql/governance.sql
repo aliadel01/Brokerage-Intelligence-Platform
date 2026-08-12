@@ -21,3 +21,21 @@ CREATE TABLE IF NOT EXISTS brokerage_dwh.governance.dq_audit_log
     message         VARCHAR,
     logged_at       TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3)
 );
+
+-- ---------------------------------------------------------------------------
+-- DBT test results log — structured record of all dbt test results, including pass/fail/warn/error.
+-- ---------------------------------------------------------------------------
+
+create table if not exists governance.dbt_test_results (
+    result_id       number(38,0) autoincrement primary key,
+    invocation_id   varchar         not null,  -- dbt's UUID for this run, groups all tests from one `dbt build`/`dbt test`
+    run_started_at  timestamp_ntz(3) not null,
+    test_name       varchar         not null,  -- unique_id, e.g. unique_silver_trade_trade_id
+    model_name      varchar,                   -- model the test is attached to, e.g. silver_trade
+    status          varchar(10)     not null,  -- pass / fail / warn / error / skipped
+    severity        varchar(10)     not null,  -- error / warn (from test's own config)
+    failures        number(38,0),              -- row count that failed the test, null if not applicable
+    execution_time  float,                     -- seconds
+    message         varchar,                   -- dbt's own failure message
+    _loaded_at           TIMESTAMP_NTZ(3) DEFAULT CURRENT_TIMESTAMP()::TIMESTAMP_NTZ(3)
+    );

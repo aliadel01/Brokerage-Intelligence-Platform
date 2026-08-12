@@ -2,9 +2,35 @@
 
 
 ## Table of Contents
-1. [Bronze and Ingestion Layer](#bronze-and-ingestion-layer)
-2. [Silver Layer](#silver-layer)
-3. [Gold Layer](#gold-layer)
+- [Data Quality, Trust, and Consistency](#data-quality-trust-and-consistency)
+  - [Table of Contents](#table-of-contents)
+  - [Bronze and Ingestion Layer.](#bronze-and-ingestion-layer)
+    - [Problem 1 — Schema drift (wrong shape)](#problem-1--schema-drift-wrong-shape)
+    - [Problem 2 — Bad values (wrong content, right shape)](#problem-2--bad-values-wrong-content-right-shape)
+    - [Problem 3 — Silent failures (old design)](#problem-3--silent-failures-old-design)
+    - [Problem 4 — One control value that can't be allowed to fail silently](#problem-4--one-control-value-that-cant-be-allowed-to-fail-silently)
+    - [Problem 5 — Loader output and table shape drifting apart](#problem-5--loader-output-and-table-shape-drifting-apart)
+    - [Problem 6 — Running the same batch twice by accident](#problem-6--running-the-same-batch-twice-by-accident)
+    - [Problem 7 — A missing control file breaking the safety net silently](#problem-7--a-missing-control-file-breaking-the-safety-net-silently)
+    - [Problem 8 — Trusting our own pipeline's numbers](#problem-8--trusting-our-own-pipelines-numbers)
+    - [Problem 9 — DQ-as-Control on Ingestion](#problem-9--dq-as-control-on-ingestion)
+    - [Data Freshness](#data-freshness)
+    - [Metadata backbone](#metadata-backbone)
+  - [Silver Layer](#silver-layer)
+    - [0. These points are covered in detail in `04_silver.md`, but here is a summary.](#0-these-points-are-covered-in-detail-in-04_silvermd-but-here-is-a-summary)
+    - [1. dbt generic tests \& Referential integrity](#1-dbt-generic-tests--referential-integrity)
+    - [2. SCD2-specific checks (account/customer)](#2-scd2-specific-checks-accountcustomer)
+    - [3. Reconciliation — bronze row count vs. silver row count](#3-reconciliation--bronze-row-count-vs-silver-row-count)
+    - [4. Business-rule tests (custom singular tests)](#4-business-rule-tests-custom-singular-tests)
+      - [Problem 1 — Illegal trade status state transitions](#problem-1--illegal-trade-status-state-transitions)
+      - [Problem 2 — False versioning in tracked SCD Type 2 entities](#problem-2--false-versioning-in-tracked-scd-type-2-entities)
+    - [Store failed test results — how it works](#store-failed-test-results--how-it-works)
+      - [1. `governance.dbt_test_results` (DDL)](#1-governancedbt_test_results-ddl)
+      - [2. `macros/log_test_results.sql` — line by line](#2-macroslog_test_resultssql--line-by-line)
+      - [3. `dbt_project.yml` wiring — what each new line does](#3-dbt_projectyml-wiring--what-each-new-line-does)
+      - [4. How to use it day to day](#4-how-to-use-it-day-to-day)
+    - [ADR: Custom test-result logging over Elementary package](#adr-custom-test-result-logging-over-elementary-package)
+  - [Gold Layer](#gold-layer)
 
 
 ## Bronze and Ingestion Layer.
@@ -142,6 +168,9 @@ Implemented core dbt testing across the Silver layer using `not_null`, `unique`,
 
 - Each silver model has a PK which it can be Business Primary Key, Surrogate Key, _row_hash or Composite Key. The PK is enforced via `unique` and `not_null` tests.
 
+- severity: error $\rightarrow$ not_null, unique, unique_combination_of_columns.- 
+- severity: warn $\rightarrow$ accepted_values, relationships (Orphan/Late-arriving dimension tolerance).
+
 ### 2. SCD2-specific checks (account/customer)
 - `assert_scd2_active_flag_integrity`: Validates SCD Type 2 active flag integrity, asserting that each entity key (account_id / customer_id) resolves to exactly one record with is_current = true.
 - `assert_no_overlapping_date_ranges`: Guarantees SCD Type 2 timeline boundary validity, flagging any record where valid_from_date overlaps with the preceding version's valid_to_date.
@@ -235,4 +264,253 @@ When updating `silver_account` or `silver_customer`, flaws in incremental merge 
 `tests/silver_account/assert_account_versions_only_on_tracked_change.sql`
 `tests/silver_customer/assert_customer_versions_only_on_tracked_change.sql`.
 
+### Store failed test results — how it works
+
+Two mechanisms, working together:
+
+1. **`store_failures` (dbt native)** — physically saves the failing ROWS
+   of every failed test as a real table in Snowflake.
+2. **`log_test_results()` (custom, same pattern as `dq_audit_log`)** —
+   saves a SUMMARY row (which test, pass/fail, how many rows, when) for
+   EVERY test run, every invocation, whether it failed or not.
+
+Together: `store_failures` = the evidence. `dbt_test_results` = the index
+you query to find out what to look at.
+
+---
+
+#### 1. `governance.dbt_test_results` (DDL)
+
+New table, separate from `dq_audit_log` on purpose — `dq_audit_log` is
+batch-scoped (`batch_id NOT NULL`), tests are not. One table per evidence
+type, matching your existing `07_governance.md` philosophy.
+
+| Column | Meaning |
+|---|---|
+| `invocation_id` | UUID dbt generates once per `dbt build`/`dbt test` command. Groups all tests from the same run. |
+| `run_started_at` | Timestamp the invocation started. |
+| `test_name` | dbt's unique id for the test, e.g. `unique_silver_trade_trade_id`. |
+| `model_name` | Which model the test is attached to, e.g. `silver_trade`. |
+| `status` | `pass` / `fail` / `warn` / `error` / `skipped`. |
+| `severity` | `error` or `warn`, from the test's own config (`config: {severity: warn}` in your `.yml`). |
+| `failures` | How many rows failed the test. |
+| `execution_time` | Seconds the test took. |
+| `message` | dbt's own failure message text. |
+
+Run this once to create it.
+
+---
+
+#### 2. `macros/log_test_results.sql` — line by line
+
+```jinja
+{% macro log_test_results(results) %}
+```
+Defines the macro, takes one argument: `results`.
+
+```jinja
+  {% if execute %}
+```
+dbt compiles every macro twice — once to just parse/plan (`execute =
+false`), once for real (`execute = true`). Without this guard, the macro
+body would try to run SQL during the parse pass and fail. Standard dbt
+guard, you'll see it in every macro that runs a query.
+
+```jinja
+    {% set test_rows = [] %}
+```
+Empty list — we'll build up one SQL `VALUES (...)` tuple per test result
+here, then insert them all in one statement instead of one `INSERT` per
+test (much faster).
+
+```jinja
+    {% for r in results %}
+```
+`results` is a **dbt built-in** — when you put a macro call in
+`on-run-end`, dbt automatically hands you a list of every node it just
+ran (models, tests, seeds — everything), each one a `Result` object. You
+don't create this list yourself, dbt gives it to you.
+
+```jinja
+      {% if r.node.resource_type == 'test' %}
+```
+`results` contains models too — we only care about test nodes here, so
+skip anything that isn't one.
+
+```jinja
+        {% set model_name = r.node.attached_node if r.node.attached_node else r.node.depends_on.nodes[0] %}
+```
+Gets the model this test belongs to. Most tests (`not_null`, `unique`,
+etc. defined under a model's `columns:` in `.yml`) have `attached_node`
+set directly. Singular tests (a raw `.sql` file in `tests/`) don't have
+that attribute populated the same way, so we fall back to the first node
+it `depends_on` — normally the model it queries.
+
+```jinja
+        {% set severity = r.node.config.severity | lower if r.node.config is defined else 'error' %}
+```
+Reads the test's configured severity (`error` is dbt's default if none
+was set). Lowercased for consistent storage.
+
+```jinja
+        {% set msg = (r.message or '') | replace("'", "''") %}
+```
+dbt's failure message, e.g. `"Got 3 results, configured to fail if != 0"`.
+`replace("'", "''")` escapes single quotes — without this, a message
+containing an apostrophe would break the SQL string and crash the insert.
+
+```jinja
+        {% set row %}
+          ('{{ invocation_id }}', '{{ run_started_at }}', '{{ r.node.name }}',
+           '{{ model_name }}', '{{ r.status }}', '{{ severity }}',
+           {{ r.failures if r.failures is not none else 'null' }},
+           {{ r.execution_time }}, '{{ msg }}')
+        {% endset %}
+```
+Builds one SQL tuple `('val1', 'val2', ...)` matching the table's column
+order exactly. `invocation_id` and `run_started_at` are **also** dbt
+built-ins, available anywhere in a run — no need to pass them in.
+`r.failures` can be `None` (e.g. for a test that errored before it could
+count rows) — the inline `if/else` writes SQL `null` instead of Python
+`None` (which would break the SQL).
+
+```jinja
+        {% do test_rows.append(row) %}
+      {% endif %}
+    {% endfor %}
+```
+Adds the tuple to the list, closes the `if`, closes the `for` loop — one
+tuple built per test node.
+
+```jinja
+    {% if test_rows | length > 0 %}
+```
+Skip the insert entirely if there were zero tests this run (e.g. a
+`dbt run` with no `dbt test` step) — an `INSERT ... VALUES` with no rows
+is invalid SQL.
+
+```jinja
+      {% set query %}
+        insert into governance.dbt_test_results
+          (invocation_id, run_started_at, test_name, model_name, status,
+           severity, failures, execution_time, message)
+        values
+          {{ test_rows | join(',\n') }}
+      {% endset %}
+```
+Builds one multi-row `INSERT`, joining every tuple with a comma —
+standard SQL multi-row insert syntax.
+
+```jinja
+      {% do run_query(query) %}
+```
+Actually executes the SQL against Snowflake. `run_query` is a dbt
+built-in for exactly this — running arbitrary SQL from inside a macro.
+
+```jinja
+      {% do log('logged ' ~ (test_rows | length) ~ ' test results to governance.dbt_test_results', info=true) %}
+```
+Prints a one-line confirmation to the console/log so you can see it ran
+(e.g. `logged 42 test results to governance.dbt_test_results`).
+
+```jinja
+    {% endif %}
+  {% endif %}
+{% endmacro %}
+```
+Close everything out.
+
+---
+
+#### 3. `dbt_project.yml` wiring — what each new line does
+
+```yaml
+on-run-end:
+  - "{{ run_silver_reconciliation_checks() }}"
+  - "{{ log_test_results(results) }}"
+```
+`on-run-end` is a dbt hook that runs a list of SQL/macro statements after
+every node in the invocation finishes — but crucially, **before** the
+invocation fully closes, so `results` (built from every node that just
+ran) is still available to reference. Order matters here only in that
+both need `execute = true`, which they get automatically at this stage —
+they don't depend on each other, so order between the two lines doesn't
+matter.
+
+```yaml
+tests:
+  +store_failures: true
+  +schema: dbt_test_failures
+```
+This is dbt's own native feature, not custom code. `+store_failures: true`
+applied at the top level (`tests:`) means **every** test in the project
+gets this behavior, not just some. When a test fails, instead of only
+printing to console, dbt runs a `CREATE TABLE ... AS SELECT` (or similar)
+containing the exact rows that failed that test, into schema
+`dbt_test_failures`. Table name = the test's unique name (same as
+`test_name` in `dbt_test_results`) — so you can join the two: the summary
+table tells you a test failed and how many rows, the failures schema has
+the *actual* offending rows to inspect.
+
+---
+
+#### 4. How to use it day to day
+
+```sql
+-- did anything fail in the last run?
+select * from governance.dbt_test_results
+where invocation_id = (select max(invocation_id) from governance.dbt_test_results)
+  and status in ('fail', 'error');
+
+-- see the actual bad rows for a specific failed test
+select * from dbt_test_failures.unique_silver_trade_trade_id;
+
+-- trend: is a specific test getting flakier over time?
+select test_name, run_started_at, status, failures
+from governance.dbt_test_results
+where test_name = 'unique_silver_trade_trade_id'
+order by run_started_at desc;
+```
+
+No manual step needed once wired in — every `dbt build` / `dbt test`
+populates both automatically.
+
+### ADR: Custom test-result logging over Elementary package
+
+**Status:** Accepted
+
+**Context:** Need failed dbt test results stored queryably (not just
+console/`run_results.json`). Two options evaluated: (1) the open-source
+`elementary` dbt package, (2) a custom macro (`log_test_results()`)
+writing into a dedicated `governance.dbt_test_results` table, paired with
+dbt's native `store_failures: true`.
+
+**Decision:** Custom macro + native `store_failures`. No external
+package added.
+
+**Reasoning:**
+- **Evidence stays unified.** Every other observability signal in this
+  project — bronze ingestion (`_dq_errors`, `dq_audit_log`), silver
+  reconciliation (`dq_audit_log`) — already lands in `governance`. A
+  custom table keeps test results in the same place, queryable with the
+  same joins, following the same `check_type`/`severity` shape documented
+  in `07_governance.md`. Elementary would add its own separate schema
+  (`elementary` by default) — a second, disconnected evidence store.
+- **No current need for what Elementary is actually for.** Elementary's
+  real value is alerting (Slack/email/Teams), anomaly detection, and a
+  hosted dashboard. Current requirement is "queryable in a table" only —
+  none of Elementary's differentiators apply yet, so its cost (extra
+  dependency, extra schema, less control over row shape) isn't offset by
+  a benefit we'd use.
+- **Full control, same pattern as the rest of the layer.** The custom
+  table's columns, `on-run-end` timing, and failure-storage behavior
+  (`store_failures`) are all native dbt features already used elsewhere
+  in this project (ADR-004 in `04_silver.md` — same "standard dbt
+  pattern, not project-specific" preference). No dependency on an
+  external package's release cycle or breaking changes.
+
+**Revisit if:** the team later needs real alerting, anomaly detection, or
+a dashboard — at that point Elementary's actual value proposition kicks
+in and the trade-off flips. Until then, adding it would be an unused
+dependency, not a capability gap.
 ## Gold Layer

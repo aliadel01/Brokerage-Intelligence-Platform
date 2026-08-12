@@ -18,6 +18,8 @@ snapshot-paths: ["snapshots"]
 # Configuring the "on-run-end" hook to run reconciliation checks after dbt finishes running models.
 on-run-end:
   - "{{ run_silver_reconciliation_checks() }}"
+  - "{{ log_test_results(results) }}"
+
 
 # setting a default variable for the reconciliation threshold percentage.
 vars:

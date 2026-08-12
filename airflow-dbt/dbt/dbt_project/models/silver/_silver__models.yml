@@ -13,14 +13,17 @@ models:
     columns:
       - name: date_sk
         data_type: integer
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: public
             pii: false
       - name: date_value
         data_type: date
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -142,7 +145,9 @@ models:
     columns:
       - name: employee_id
         data_type: integer
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: confidential
@@ -150,7 +155,7 @@ models:
       - name: manager_id
         data_type: integer
         tests:
-          - relationships: {to: ref('silver_hr'), field: employee_id}
+          - relationships: {to: ref('silver_hr'), field: employee_id, config: {severity: warn}}
         config:
           meta:
             classification: confidential
@@ -218,7 +223,9 @@ models:
     columns:
       - name: industry_id
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -256,7 +263,9 @@ models:
     columns:
       - name: status_id
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -288,7 +297,9 @@ models:
     columns:
       - name: tax_rate_id
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -302,7 +313,7 @@ models:
       - name: tax_rate
         data_type: numeric
         tests:
-          - dbt_utils.accepted_range: {min_value: 0, max_value: 1, inclusive: true}
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 1, inclusive: true, config: {severity: warn}}
         config:
           meta:
             classification: public
@@ -328,7 +339,9 @@ models:
     columns:
       - name: time_sk
         data_type: integer
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -408,7 +421,9 @@ models:
     columns:
       - name: trade_type_id
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -452,7 +467,9 @@ models:
     columns:
       - name: agency_id
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: confidential
@@ -591,7 +608,9 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -611,17 +630,21 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [account_id, _batch_id, valid_from_date]
+          config: {severity: error}
     columns:
       - name: account_version_sk
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: account_id
         data_type: integer
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: confidential
@@ -629,7 +652,7 @@ models:
       - name: broker_id
         data_type: integer
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_hr'), field: employee_id, config: {severity: warn}}
         config:
           meta:
@@ -638,7 +661,7 @@ models:
       - name: customer_id
         data_type: integer
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
         config:
           meta:
@@ -674,21 +697,24 @@ models:
             pii: false
       - name: valid_from_date
         data_type: date
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: valid_to_date
         data_type: date
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: is_current
         data_type: boolean
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -716,17 +742,21 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [customer_id, _batch_id, valid_from_date]
+          config: {severity: error}
     columns:
       - name: customer_version_sk
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: customer_id
         data_type: integer
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: confidential
@@ -925,21 +955,24 @@ models:
             pii: false
       - name: valid_from_date
         data_type: date
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: valid_to_date
         data_type: date
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: is_current
         data_type: boolean
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -967,7 +1000,9 @@ models:
     columns:
       - name: trade_id
         data_type: integer
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -975,7 +1010,7 @@ models:
       - name: status_id
         data_type: varchar
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_status_type'), field: status_id, config: {severity: warn}}
         config:
           meta:
@@ -984,7 +1019,7 @@ models:
       - name: trade_type_id
         data_type: varchar
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_trade_type'), field: trade_type_id, config: {severity: warn}}
         config:
           meta:
@@ -1021,7 +1056,7 @@ models:
       - name: customer_account_id
         data_type: integer
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
         config:
           meta:
@@ -1075,7 +1110,8 @@ models:
             pii: false
       - name: trade_timestamp
         data_type: timestamp_ntz
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1095,10 +1131,12 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [posting_ts, cik]
+          config: {severity: error}
     columns:
       - name: posting_ts
         data_type: timestamp_ntz
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1111,7 +1149,8 @@ models:
             pii: false
       - name: cik
         data_type: varchar
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -1217,17 +1256,20 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [posting_ts, security_symbol]
+          config: {severity: error}
     columns:
       - name: posting_ts
         data_type: timestamp_ntz
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: security_symbol
         data_type: varchar
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -1320,7 +1362,7 @@ models:
       - name: account_id
         data_type: integer
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
         config:
           meta:
@@ -1328,7 +1370,8 @@ models:
             pii: false
       - name: transaction_ts
         data_type: timestamp_ntz
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1365,7 +1408,9 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1385,10 +1430,12 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [market_date, security_symbol]
+          config: {severity: error}
     columns:
       - name: market_date
         data_type: date
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: public
@@ -1396,7 +1443,7 @@ models:
       - name: security_symbol
         data_type: varchar
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_finwire_sec'), field: security_symbol, config: {severity: warn}}
         config:
           meta:
@@ -1446,7 +1493,9 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1473,7 +1522,7 @@ models:
       - name: trade_id
         data_type: integer
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
         config:
           meta:
@@ -1511,7 +1560,9 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1532,7 +1583,7 @@ models:
       - name: customer_id
         data_type: integer
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
         config:
           meta:
@@ -1578,7 +1629,9 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1598,10 +1651,12 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [posting_ts, company_cik]
+          config: {severity: error}
     columns:
       - name: posting_ts
         data_type: timestamp_ntz
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1699,7 +1754,7 @@ models:
       - name: company_cik
         data_type: varchar
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_finwire_cmp'), field: cik, config: {severity: warn}}
         config:
           meta:
@@ -1713,7 +1768,9 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1733,11 +1790,12 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [trade_id, status_ts, status_id]
+          config: {severity: error}
     columns:
       - name: trade_id
         data_type: integer
         tests:
-          - not_null
+          - not_null: {config: {severity: error}}
           - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
         config:
           meta:
@@ -1745,14 +1803,16 @@ models:
             pii: false
       - name: status_ts
         data_type: timestamp_ntz
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
             pii: false
       - name: status_id
         data_type: varchar
-        tests: [not_null]
+        tests:
+          - not_null: {config: {severity: error}}
         config:
           meta:
             classification: internal
@@ -1765,7 +1825,9 @@ models:
             pii: false
       - name: _row_hash
         data_type: varchar
-        tests: [not_null, unique]
+        tests:
+          - not_null: {config: {severity: error}}
+          - unique: {config: {severity: error}}
         config:
           meta:
             classification: internal
