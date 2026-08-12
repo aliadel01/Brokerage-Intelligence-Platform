@@ -11,6 +11,7 @@ This document outlines the governance, compliance, and ownership practices for t
   6. [Retention & Erasure](#retention--erasure)
   7. [Historical Reconstruction and Access Auditing](#historical-reconstruction-and-access-auditing)
   8. [Regulatory Mapping](#regulatory-mapping)
+  9. [Exposures](#exposures)
 
 ## Roles & Access Control
 
@@ -391,4 +392,22 @@ that would need a join to reconstruct which row was dirty.
 - **GDPR-style**: apply to customer PII — `silver_customer`/`dim_customer`. Holds name, address, email, DOB, tax_id, phone. SCD2 (ADR-001, day-grain, tracked columns include name/address/email) mean history kept forever by design — direct tension vs GDPR erasure right + data minimization. Carried-only fields (phone, DOB, tax_id) still land in table even though not "tracked" for versioning — still personal data, still in scope. Control need: retention policy + deletion/anonymization procedure on SCD2 history, access control on PII columns, and lawful-basis documentation for why full history kept (business need: identity/location/status audit — spec says so).
 
 - **PCI-DSS**: not apply. No PAN, card number, CVV, expiry field anywhere in dictionary or model — `CashTransaction`/`fact_cashtransaction` carry amount + type only, no payment-instrument detail. Whole pipeline (bronze→silver→gold) never receive cardholder data, so PCI-DSS scope = zero. Correct answer for "why not" question — not "we're careless," but "data never enters system," which is the actual PCI scoping question interviewers check.
+
+## Exposures
+
+
+`exposures.yml` declares downstream consumers of the gold layer so dbt can
+show them in the DAG/docs site and `dbt build --select +exposure:*` can
+validate that every model an exposure depends on still exists and builds
+clean. An exposure only makes sense once real gold models exist to point
+at — that's why this is added now, after the star schema, not earlier.
+
+
+| Exposure | Type | Status | Depends on |
+|---|---|---|---|
+| `power_bi_dashboard` | `dashboard` | **Real** | All 17 gold models (full star schema) |
+| `ml_trade_behavior_model` | `ml` | Placeholder | `fact_trade`, `fact_holding`, `fact_market_history`, `dim_customer`, `dim_security` |
+| `reverse_etl_crm_sync` | `application` | Placeholder | `dim_customer`, `dim_account`, `dim_prospect` |
+
+> `ml_trade_behavior_model` and `reverse_etl_crm_sync` are not real integrations. Nothing downstream actually consumes those models today. They were added deliberately, as an **exercise**.
 

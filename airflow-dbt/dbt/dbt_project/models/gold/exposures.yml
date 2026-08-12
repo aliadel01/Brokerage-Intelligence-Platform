@@ -1,0 +1,81 @@
+version: 2
+
+exposures:
+
+  # ===========================================================================
+  # Power BI — real, active consumer. Depends on the full gold layer.
+  # ===========================================================================
+  - name: power_bi_dashboard
+    label: "Brokerage Analytics — Power BI Dashboard"
+    type: dashboard
+    maturity: high
+    description: >
+      Primary BI reporting layer for the brokerage data platform. Trading,
+      account, and financial-performance dashboards read directly from the
+      gold star schema. This is the only exposure in this file that reflects
+      a real, currently-implemented downstream consumer.
+    depends_on:
+      - ref('dim_account')
+      - ref('dim_broker')
+      - ref('dim_company')
+      - ref('dim_customer')
+      - ref('dim_date')
+      - ref('dim_prospect')
+      - ref('dim_security')
+      - ref('dim_statustype')
+      - ref('dim_time')
+      - ref('dim_tradetype')
+      - ref('fact_cash_transaction')
+      - ref('fact_company_financials')
+      - ref('fact_holding')
+      - ref('fact_market_history')
+      - ref('fact_trade')
+      - ref('fact_trade_history')
+      - ref('fact_watch_history')
+    owner:
+      name: Analytics Engineering
+      email: analytics-eng@example.com
+
+  # ===========================================================================
+  # ML — placeholder exposure. Not an actual implemented consumer.
+  # ===========================================================================
+  - name: ml_trade_behavior_model
+    label: "ML — Trade Behavior / Churn Model (placeholder)"
+    type: ml
+    maturity: low
+    description: >
+      Hypothetical ML use case (e.g. churn or trade-propensity scoring) that
+      would consume trade, holding, market, and customer data. No model is
+      actually trained or deployed against this platform today — this
+      exposure exists to demonstrate how a future ML consumer would be
+      declared and dependency-mapped, not to represent a real pipeline.
+    depends_on:
+      - ref('fact_trade')
+      - ref('fact_holding')
+      - ref('fact_market_history')
+      - ref('dim_customer')
+      - ref('dim_security')
+    owner:
+      name: Data Science (placeholder)
+      email: data-science@example.com
+
+  # ===========================================================================
+  # Reverse ETL — placeholder exposure. Not an actual implemented consumer.
+  # ===========================================================================
+  - name: reverse_etl_crm_sync
+    label: "Reverse ETL — CRM/Marketing Sync (placeholder)"
+    type: application
+    maturity: low
+    description: >
+      Hypothetical reverse-ETL sync pushing customer, account, and prospect
+      segments into a downstream CRM or marketing platform. No sync job
+      actually exists today — this exposure exists to demonstrate
+      dependency mapping for an operational (non-BI) consumer, not to
+      represent a real integration.
+    depends_on:
+      - ref('dim_customer')
+      - ref('dim_account')
+      - ref('dim_prospect')
+    owner:
+      name: RevOps (placeholder)
+      email: revops@example.com

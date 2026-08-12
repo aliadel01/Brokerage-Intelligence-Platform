@@ -8,6 +8,9 @@ models:
 
   - name: dim_account
     description: "SCD Type 2 dimension storing customer brokerage account details, including account status, associated broker, and customer relationships."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: account_sk
         config:
@@ -67,6 +70,9 @@ models:
 
   - name: dim_broker
     description: "Dimension model containing broker/employee details, organizational hierarchy (manager mapping), office locations, and contact information."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: broker_sk
         config:
@@ -121,6 +127,9 @@ models:
 
   - name: dim_company
     description: "Dimension containing corporate information for traded entities, including CIK numbers, S&P credit ratings, sector/industry classification, and address details."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: company_sk
         config:
@@ -210,6 +219,9 @@ models:
 
   - name: dim_customer
     description: "SCD Type 2 dimension storing customer demographic and contact data, PII attributes, tier classifications, and local/national tax rate codes."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: customer_sk
         config:
@@ -414,6 +426,9 @@ models:
 
   - name: dim_date
     description: "Standard calendar and fiscal date dimension for time-series aggregation, including quarterly, monthly, weekly breakdowns, and holiday indicators."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: date_sk
         config:
@@ -508,6 +523,9 @@ models:
 
   - name: dim_prospect
     description: "Dimension tracking prospective clients and marketing leads, storing financial attributes, demographic data, and credit ratings."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: prospect_sk
         config:
@@ -632,6 +650,9 @@ models:
 
   - name: dim_security
     description: "Dimension modeling tradable financial instruments (stocks, bonds, etc.), exchange listings, dividend details, and issuer company references."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: security_sk
         config:
@@ -691,6 +712,9 @@ models:
 
   - name: dim_statustype
     description: "Reference dimension defining status codes and human-readable status names across trades, accounts, and securities."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: status_type_sk
         config:
@@ -710,6 +734,9 @@ models:
 
   - name: dim_time
     description: "Time-of-day dimension (granular to the second) used for intra-day timestamp analysis, market hours tracking, and office hours flags."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: time_sk
         config:
@@ -764,6 +791,9 @@ models:
 
   - name: dim_tradetype
     description: "Reference dimension defining trade order classification types, buy/sell indicators, and market/limit order flags."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: trade_type_sk
         config:
@@ -793,6 +823,9 @@ models:
 
   - name: fact_cash_transaction
     description: "Fact table recording monetary deposits, withdrawals, and cash movement transactions tied to customer brokerage accounts."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: transaction_date_sk
         config:
@@ -837,6 +870,9 @@ models:
 
   - name: fact_company_financials
     description: "Fact table storing periodic financial reporting metrics for companies, including revenue, earnings, EPS, profit margins, and balance sheet metrics."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: company_sk
         config:
@@ -921,6 +957,9 @@ models:
 
   - name: fact_holding
     description: "Fact table tracking positions and holdings state changes over time across accounts, securities, and triggering trades."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: originating_trade_id
         config:
@@ -975,6 +1014,9 @@ models:
 
   - name: fact_market_history
     description: "Fact table recording daily market trading activity per security, including high, low, close prices, and overall trade volume."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: security_sk
         config:
@@ -1024,6 +1066,9 @@ models:
 
   - name: fact_trade
     description: "Core fact table logging executed securities trades, including execution prices, transaction fees, commissions, taxes, and trading context."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: trade_sk
         config:
@@ -1118,6 +1163,9 @@ models:
 
   - name: fact_trade_history
     description: "Fact table tracking status progression state changes (e.g., submitted, pending, completed, cancelled) over the lifecycle of each trade order."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: trade_sk
         config:
@@ -1167,6 +1215,9 @@ models:
 
   - name: fact_watch_history
     description: "Fact table logging customer watchlist interactions (add/remove actions) for specific securities over time."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: customer_sk
         config:
