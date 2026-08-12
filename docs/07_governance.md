@@ -1,4 +1,7 @@
 # Governance, Compliance and Ownership
+
+This document outlines the governance, compliance, and ownership practices for the data platform.
+
 ## Table of Contents
   1. [Roles & Access Control](#roles--access-control)
   2. [Ownership](#ownership)
@@ -135,8 +138,22 @@ FROM TABLE(
 | BRONZE_CUSTOMER | C_NAT_TX_ID | internal |
 
 
+### Restricted PII Access Audit Example 
 
 
+Snowflake `ACCESS_HISTORY` is used to audit access to columns classified as restricted_pii.
+
+For the `silver_hr` example, the restricted columns are:
+
+`first_name`, `last_name`, `middle_initial`, `phone`
+
+The audit is scoped to the last 30 days and returns the time, user, query ID,
+and SQL text for queries that accessed at least one of these columns.
+You can find an example query in `sql/restricted_pii_access_history.sql`
+
+This provides an operational audit trail answering:
+
+> Who accessed restricted PII, when did they access it, and which query did they use?
 ### Documentation — schema.yml for all layers mirrors the tag
 
 `meta.classification` is set on the same columns in
@@ -202,6 +219,56 @@ SELECT middle_initial FROM brokerage_dwh.silver.silver_hr LIMIT 5;
   </div>
 
 </div>
+
+## Historical Reconstruction and Access Auditing
+
+Governance is not only about defining who can access data or how PII is
+masked. It also requires being able to answer two operational questions:
+
+1. What did an account look like at a specific point in time?
+2. Who accessed restricted PII?
+
+The following SQL artifacts provide those two controls for the Silver layer.
+
+### Point-in-Time Reconstruction — `silver_account`
+
+The `silver_account` model maintains versioned account records with
+`valid_from_date` and `valid_to_date`. This allows the model to reconstruct
+the account state that was valid at a specific point in time rather than
+returning only the current version.
+
+The query accepts an `as_of_date` and returns the applicable version of each
+account for that date.
+
+```sql
+SET as_of_date = '2011-06-30';
+
+SELECT
+    account_version_sk,
+    account_id,
+    broker_id,
+    customer_id,
+    account_name,
+    tax_status,
+    status_id,
+    cdc_flag,
+    valid_from_date,
+    valid_to_date,
+    is_current,
+    _batch_id,
+    _source_table
+FROM brokerage_dwh.silver.silver_account
+WHERE valid_from_date <= $as_of_date
+  AND (
+      valid_to_date >= $as_of_date
+      OR valid_to_date IS NULL
+  )
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY account_id
+    ORDER BY valid_from_date DESC
+) = 1
+ORDER BY account_id;
+```
 
 ## DQ-as-Control on Ingestion
 Scope: bronze-layer ingestion (`main.py`).
@@ -280,27 +347,3 @@ DQ evidence in a log stream nobody archives, and keeps row-level cast
 errors traveling with the row itself rather than off in a separate table
 that would need a join to reconstruct which row was dirty.
  
-
-## Open items
-
-- Metadata envelope columns (`_batch_id`, `_source_file`, `_loaded_at`,
-  `_row_hash`, `_dq_errors`, `_cdc_flag`, `_cdc_dsn`) are intentionally
-  untagged for now — pipeline metadata, not source-classified data.
-  Revisit if a stricter policy requires tagging these as `internal` too.
-- `dq_audit_log` is defined but not yet wired into `main.py` — the
-  reconciliation check still only `print()`s warnings; inserting into
-  `governance.dq_audit_log` from `run_batch()` is the next step.
-- `role_custodian`/`role_analyst`/`role_steward` are not yet bound to real
-  human users (`GRANT ROLE ... TO USER ...` lines are placeholders) —
-  needs actual Snowflake usernames filled in. Right now `role_custodian`
-  and `role_steward` resolve to the same person.
-- `role_steward`'s grant script (`sql/roles.sql`) not yet written —
-  read-only silver+gold, `restricted_pii` masked (same shape as
-  `role_analyst`), no bronze access.
-- `numbercars`, `numberchildren`, `age`, `maritalstatus`, `ownorrentflag`,
-  `numbercreditcards` on `bronze_prospect` have no explicit
-  `data_classification` tag yet (only `income`/`creditrating`/
-  `networth`/`employer`/`agencyid` and the name/address/contact fields
-  are tagged in `classification_tags.sql`). Silver/gold carry these as
-  `restricted_pii` by inference, not by a matching bronze tag — revisit
-  if full bronze↔silver↔gold parity is required later.
