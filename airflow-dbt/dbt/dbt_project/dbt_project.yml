@@ -43,10 +43,7 @@ models:
   dbt_project:
     silver:
       +schema: silver
-      +materialized: table   # start simple; revisit only if run time on the
-                              # full window-function rebuild becomes a real
-                              # problem -- see the table-vs-incremental
-                              # trade-off discussed with the user.
+      +materialized: table
       archetype_a:
         +tags: ['silver', 'static_dim']
       archetype_b_real_cdc:
@@ -59,12 +56,18 @@ models:
         +tags: ['silver', 'parsed']
       archetype_e:
         +tags: ['silver', 'batch1_only_fact']
-
+      +meta:
+        owner: brokerage-data-platform
+        data_steward: role_steward
+        technical_owner: role_custodian
     gold:
       +schema: gold
       +materialized: view
-      
       fact_tables:
         +tags: ['gold', 'fact']
       dim_tables:
         +tags: ['gold', 'dim']
+      +meta:
+        owner: brokerage-data-platform
+        data_steward: role_steward
+        technical_owner: role_custodian

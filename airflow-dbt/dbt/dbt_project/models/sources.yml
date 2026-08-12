@@ -16,6 +16,11 @@ sources:
       warehouse (see 07_governance.md) — this is the documented view,
       the tag is the enforced source of truth.
 
+    meta:
+      owner: brokerage-data-platform
+      data_steward: role_steward
+      technical_owner: role_custodian
+
     tables:
 
       # ---------------- Archetype A (Historical Only) ----------------

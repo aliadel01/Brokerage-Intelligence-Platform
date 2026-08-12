@@ -1,15 +1,16 @@
 # Governance, Compliance and Ownership
 ## Table of Contents
   1. [Roles & Access Control](#roles--access-control)
-  2. [Data Classification](#data-classification)
-  3. [PII Masking Policies](#pii-masking-policies)
-  4. [DQ-as-Control on Ingestion](#dq-as-control-on-ingestion)
-  5. [Open items](#open-items)
+  2. [Ownership](#ownership)
+  3. [Data Classification](#data-classification)
+  4. [PII Masking Policies](#pii-masking-policies)
+  5. [DQ-as-Control on Ingestion](#dq-as-control-on-ingestion)
+  6. [Open items](#open-items)
 
 
 ## Roles & Access Control
 
-Four roles, split along two axes: **service account vs. human login**, and
+Five roles, split along two axes: **service account vs. human login**, and
 **what layer they can see**. See `sql/roles.sql` for the full grant script.
 
 1. **`role_bronze_loader`** — **service account**, no human login. **Owns bronze
@@ -46,6 +47,39 @@ Four roles, split along two axes: **service account vs. human login**, and
    transformation would mean a single compromised credential (or a single
    bug) could corrupt the entire pipeline end-to-end, with no boundary in
    between.
+
+5. **`role_steward`** — **human login**, **read-only** on silver and gold
+   (no bronze). Distinct from `role_custodian`: the steward owns the
+   *business meaning* of a model (definitions, classification correctness,
+   whether a metric still matches what the business expects) — not raw,
+   unmasked debugging access across all three layers. `restricted_pii`
+   stays masked to this role, same as `role_analyst`. This is the identity
+   recorded as `data_steward` in model `meta` (see Ownership below).
+
+## Ownership
+
+Every silver and gold model carries three `meta` fields, set once as a
+project-wide default in `dbt_project.yml` (`+meta` under `models.silver`
+and `models.gold`) rather than repeated per model in the `.yml` schema
+files — dbt merges `meta` down through folder-level config, so one
+project-level block covers every model in that folder, including
+subfolders (`archetype_a`, `fact_tables`, etc.), and a specific model can
+still override any single field in its own schema.yml if it ever needs a
+different owner. `sources.yml` has no equivalent inheritance mechanism —
+`bronze` is a single source, so its `meta` is set once directly on the
+source.
+
+| Field | Meaning | Current value |
+|---|---|---|
+| `owner` | The project/team accountable for the layer overall. | `brokerage-data-platform` |
+| `data_steward` | Owns business meaning — definitions, classification correctness, whether logic still matches what the business expects. | `role_steward` |
+| `technical_owner` | Owns the pipeline/code — who gets paged when a load or a model build breaks. | `role_custodian` |
+
+Right now `role_steward` and `role_custodian` are the same person playing
+both roles on a one-person project — recorded as two distinct roles
+regardless, so the split is already in place (grants, docs, `meta`
+values) the moment a second person joins and only one of the two hats
+needs handing off.
 
 ## Data Classification
 
@@ -256,9 +290,13 @@ that would need a join to reconstruct which row was dirty.
 - `dq_audit_log` is defined but not yet wired into `main.py` — the
   reconciliation check still only `print()`s warnings; inserting into
   `governance.dq_audit_log` from `run_batch()` is the next step.
-- `role_custodian`/`role_analyst` are not yet bound to real human users
-  (`GRANT ROLE ... TO USER ...` lines are placeholders) — needs actual
-  Snowflake usernames filled in.
+- `role_custodian`/`role_analyst`/`role_steward` are not yet bound to real
+  human users (`GRANT ROLE ... TO USER ...` lines are placeholders) —
+  needs actual Snowflake usernames filled in. Right now `role_custodian`
+  and `role_steward` resolve to the same person.
+- `role_steward`'s grant script (`sql/roles.sql`) not yet written —
+  read-only silver+gold, `restricted_pii` masked (same shape as
+  `role_analyst`), no bronze access.
 - `numbercars`, `numberchildren`, `age`, `maritalstatus`, `ownorrentflag`,
   `numbercreditcards` on `bronze_prospect` have no explicit
   `data_classification` tag yet (only `income`/`creditrating`/
