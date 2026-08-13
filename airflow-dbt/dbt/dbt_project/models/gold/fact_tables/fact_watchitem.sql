@@ -20,10 +20,10 @@ watch_time as (
 )
 
 select
-    customer.customer_sk,
-    security.security_sk,
-    watch_date.date_sk    as watch_date_sk,
-    watch_time.time_sk    as watch_time_sk,
+    coalesce(customer.customer_sk, -1)  as customer_sk,
+    coalesce(security.security_sk, -1)  as security_sk,
+    coalesce(watch_date.date_sk, -1)    as watch_date_sk,
+    coalesce(watch_time.time_sk, -1)    as watch_time_sk,
     watch.watch_action    as action_code,
     watch._cdc_flag       as cdc_flag,
     watch._cdc_dsn        as cdc_dsn,

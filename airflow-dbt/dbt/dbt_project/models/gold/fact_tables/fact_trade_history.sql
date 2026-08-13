@@ -1,13 +1,10 @@
 {#-
-    Per gold.md ADR-009: account_sk/security_sk resolved via lookup to
-    fact_trade on trade_id (not present in silver_trade_history itself)
-    -- storage cost accepted in exchange for not forcing a join to
-    fact_trade on every "status history by account/security" query.
-
-    INNER JOIN to fact_trade is deliberate: every trade_id in
-    silver_trade_history is expected to already exist in fact_trade
-    (fact_trade = silver_trade, which covers every known trade's latest
-    state). This model must run after fact_trade in the DAG.
+    account_sk/security_sk resolved via lookup to fact_trade on trade_id
+    (ADR-010). INNER JOIN to fact_trade deliberate (must run after
+    fact_trade). fact_trade's own account_sk/security_sk already
+    coalesced to -1 upstream, so no re-coalesce needed on those two.
+    status_type_sk/status_date_sk/status_time_sk resolved separately
+    here and still need their own coalesce.
 -#}
 
 with trade_history as (
@@ -35,11 +32,11 @@ select
     trade_history.trade_id,
     trade.account_sk,
     trade.security_sk,
-    status_type.status_type_sk,
-    status_date.date_sk    as status_date_sk,
-    status_time.time_sk    as status_time_sk,
-    trade_history._source_model    as source_model,
-    trade_history._batch_id        as batch_id
+    coalesce(status_type.status_type_sk, -1)  as status_type_sk,
+    coalesce(status_date.date_sk, -1)         as status_date_sk,
+    coalesce(status_time.time_sk, -1)         as status_time_sk,
+    trade_history._source_model                as source_model,
+    trade_history._batch_id                    as batch_id
 from trade_history
 inner join trade
     on trade_history.trade_id = trade.trade_id

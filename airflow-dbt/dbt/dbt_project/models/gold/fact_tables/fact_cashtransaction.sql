@@ -16,9 +16,9 @@ txn_time as (
 )
 
 select
-    txn_date.date_sk       as transaction_date_sk,
-    txn_time.time_sk       as transaction_time_sk,
-    account.account_sk,
+    coalesce(txn_date.date_sk, -1)    as transaction_date_sk,
+    coalesce(txn_time.time_sk, -1)    as transaction_time_sk,
+    coalesce(account.account_sk, -1)  as account_sk,
     cash.amount,
     cash.description,
     cash._cdc_flag         as cdc_flag,

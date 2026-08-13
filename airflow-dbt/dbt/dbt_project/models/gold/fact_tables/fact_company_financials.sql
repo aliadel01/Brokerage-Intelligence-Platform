@@ -1,12 +1,7 @@
 {#-
-    year/quarter kept as degenerate dimensions per gold.md ADR-009 --
-    silver has them, so gold keeps them rather than depending entirely
-    on dim_date's own fiscal fields aligning with FINWIRE's values.
-
-    fiscal_date_sk resolved from qtr_start_date (the fiscal period
-    itself); posting_date_sk resolved from posting_date, NOT posting_ts
-    (the latter is a precise timestamp used only for silver's own dedup
-    ordering, not a reporting date).
+    year/quarter kept as degenerate dims per gold.md ADR-009.
+    fiscal_date_sk from qtr_start_date; posting_date_sk from
+    posting_date (not posting_ts).
 -#}
 
 with financials as (
@@ -26,8 +21,8 @@ posting_date_dim as (
 )
 
 select
-    company.company_sk,
-    fiscal_date.date_sk         as fiscal_date_sk,
+    coalesce(company.company_sk, -1)         as company_sk,
+    coalesce(fiscal_date.date_sk, -1)        as fiscal_date_sk,
     financials.year              as fiscal_year,
     financials.quarter           as fiscal_quarter,
     financials.revenue,
@@ -41,7 +36,7 @@ select
     financials.shares_outstanding,
     financials.diluted_shares_outstanding,
     financials._batch_id          as batch_id,
-    posting_date_dim.date_sk      as posting_date_sk
+    coalesce(posting_date_dim.date_sk, -1)   as posting_date_sk
 from financials
 left join company
     on (

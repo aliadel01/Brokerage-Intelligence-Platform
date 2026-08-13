@@ -31,6 +31,8 @@
       - [4. How to use it day to day](#4-how-to-use-it-day-to-day)
     - [ADR: Custom test-result logging over Elementary package](#adr-custom-test-result-logging-over-elementary-package)
   - [Gold Layer](#gold-layer)
+    - [Unknown member rows — fact FK columns never NULL](#unknown-member-rows--fact-fk-columns-never-null)
+    - [Dimension attribute NULL fill](#dimension-attribute-null-fill)
 
 
 ## Bronze and Ingestion Layer.
@@ -514,3 +516,42 @@ a dashboard — at that point Elementary's actual value proposition kicks
 in and the trade-off flips. Until then, adding it would be an unused
 dependency, not a capability gap.
 ## Gold Layer
+### Unknown member rows — fact FK columns never NULL
+
+Every dim gets one Unknown member row, `<dim>_sk = -1`, generated via
+`union all` inside the dim's own model (not a seed, not a post-hook —
+keeps each dim self-contained, one file, same pattern as
+`dedup_latest`/`surrogate_key` usage elsewhere in gold).
+
+- **Surrogate key:** `-1`, uniform across all dims (including smart-key
+  dims `dim_date`/`dim_time`, which never produce a real `-1` value from
+  source data, so no collision risk).
+- **Fact-side resolution:** every resolved FK on every fact wraps in
+  `coalesce(<dim>.<dim>_sk, -1)` at the same join point — no separate
+  cleanup pass. `fact_holding`/`fact_trade_history` inherit
+  `account_sk`/`security_sk` pre-coalesced from `fact_trade` (ADR-005/
+  ADR-010 lookup), so only their own directly-resolved FKs
+  (`status_type_sk`, `status_date_sk`, `status_time_sk`) need a fresh
+  coalesce.
+- **Reason:** NULL in a join key behaves inconsistently across BI
+  tools — some drop the row silently, some show blank, filters behave
+  unpredictably. `-1` is a real, joinable, always-present row.
+- **Accepted trade-off:** coalescing to `-1` cannot distinguish "FK
+  genuinely unresolvable" from "time-range join miss on an otherwise
+  valid account/customer" (`fact_trade`, `fact_cashtransaction`,
+  `fact_watchitem` all use time-aware joins). Both collapse to the same
+  Unknown row. Not fixed at the schema level — revisit only if this
+  ever shows up as a real reporting ambiguity.
+
+### Dimension attribute NULL fill
+
+Categorical/code-like dimension attributes (status, tier, gender,
+country, job_code, industry_name, etc.) coalesce NULL to the string
+`'Unknown'` at model build time, not left blank.
+
+- **Not applied to:** free-text/identifier columns — names, address
+  lines, tax_id, DOB, phone numbers, emails. These aren't a bucketable
+  category; NULL there stays NULL.
+- **Reason:** same as the FK case — a BI tool's "group by tier" should
+  show a real `Unknown` bucket, not silently merge NULLs into one
+  bucket or drop them depending on tool defaults.

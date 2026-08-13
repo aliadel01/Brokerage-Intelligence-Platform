@@ -11,8 +11,8 @@ market_date as (
 )
 
 select
-    security.security_sk,
-    market_date.date_sk    as market_date_sk,
+    coalesce(security.security_sk, -1)  as security_sk,
+    coalesce(market_date.date_sk, -1)   as market_date_sk,
     market.close_price,
     market.high_price,
     market.low_price,

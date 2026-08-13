@@ -1,15 +1,6 @@
 {#-
-    Grain: One row per account version (SCD Type 2).
-
-    SCD2 pass-through model: silver_account handles SCD Type 2 logic and
-    generates account_version_sk. This model passes through account_version_sk
-    as account_sk to preserve surrogate key determinism across gold pipelines.
-
-    Key Resolutions:
-    - broker_sk: Resolved via equi-join against dim_broker (Type 1 dimension).
-    - customer_sk: Resolved via a TIME-AWARE join against dim_customer (SCD Type 2),
-      matching account.valid_from_date against customer.effective_start_date and
-      customer.effective_end_date to maintain historical point-in-time accuracy.
+    Grain: One row per account version (SCD Type 2), plus one Unknown
+    member row (account_sk = -1) for fact FK coalesce targets.
 -#}
 
 with account as (
@@ -25,18 +16,17 @@ customer as (
     from {{ ref('dim_customer') }}
 ),
 
-
 final as (
     select
         account.account_version_sk as account_sk,
         account.account_id,
         account.account_name,
         account.tax_status,
-        account.status_id                                as account_status,
+        coalesce(account.status_id, 'Unknown')            as account_status,
         broker.broker_sk,
         customer.customer_sk,
-        account.valid_from_date                          as effective_start_date,
-        nullif(account.valid_to_date, date '9999-12-31') as effective_end_date,
+        account.valid_from_date                           as effective_start_date,
+        nullif(account.valid_to_date, date '9999-12-31')  as effective_end_date,
         account.is_current,
         account.cdc_flag
     from account
@@ -46,5 +36,23 @@ final as (
         on account.customer_id = customer.customer_id
         and account.valid_from_date >= customer.effective_start_date
         and account.valid_from_date <= coalesce(customer.effective_end_date, date '9999-12-31')
+),
+
+unknown as (
+    select
+        -1                  as account_sk,
+        'Unknown'           as account_id,
+        'Unknown'           as account_name,
+        'Unknown'           as tax_status,
+        'Unknown'           as account_status,
+        -1                  as broker_sk,
+        -1                  as customer_sk,
+        date '1900-01-01'   as effective_start_date,
+        cast(null as date)  as effective_end_date,
+        false               as is_current,
+        'U'                 as cdc_flag
 )
+
 select * from final
+union all
+select * from unknown

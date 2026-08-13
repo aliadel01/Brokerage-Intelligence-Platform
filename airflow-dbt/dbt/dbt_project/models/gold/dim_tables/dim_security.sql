@@ -1,12 +1,7 @@
 {#-
-    Same "latest per business key" collapse as dim_company -- silver
-    keeps every posting; gold needs exactly one row per symbol
-    (UNIQUE(symbol) in the DDL).
-
-    company_sk resolved by matching on company_cik when populated,
-    else company_name -- mirrors bronze's own _resolve_co_name_or_cik
-    logic (see silver_finwire_security.sql comment). Depends on
-    dim_company, not on re-deriving "latest per cik" a second time.
+    Grain: One row per symbol (latest version), plus one Unknown
+    member row (security_sk = -1, company_sk = -1 pointing to
+    dim_company's own Unknown row).
 -#}
 
 with latest_security as (
@@ -15,27 +10,48 @@ with latest_security as (
 
 company as (
     select company_sk, company_cik, company_name from {{ ref('dim_company') }}
+),
+
+final as (
+    select
+        {{ surrogate_key(['latest_security.security_symbol']) }} as security_sk,
+        latest_security.security_symbol               as symbol,
+        coalesce(latest_security.issue_type, 'Unknown') as issue_type,
+        coalesce(latest_security.status, 'Unknown')    as security_status,
+        latest_security.security_name,
+        coalesce(latest_security.exchange_id, 'Unknown') as exchange_id,
+        latest_security.shares_outstanding,
+        latest_security.first_trade_date,
+        latest_security.first_trade_exchange_date,
+        latest_security.dividend,
+        company.company_sk
+    from latest_security
+    left join company
+        on (
+            latest_security.company_cik is not null
+            and latest_security.company_cik = company.company_cik
+        )
+        or (
+            latest_security.company_cik is null
+            and latest_security.company_name = company.company_name
+        )
+),
+
+unknown as (
+    select
+        -1                    as security_sk,
+        'UNKNOWN'             as symbol,
+        'Unknown'             as issue_type,
+        'Unknown'             as security_status,
+        'Unknown'             as security_name,
+        'Unknown'             as exchange_id,
+        cast(null as bigint)  as shares_outstanding,
+        cast(null as date)    as first_trade_date,
+        cast(null as date)    as first_trade_exchange_date,
+        cast(null as numeric) as dividend,
+        -1                    as company_sk
 )
 
-select
-    {{ surrogate_key(['latest_security.security_symbol']) }} as security_sk,
-    latest_security.security_symbol   as symbol,
-    latest_security.issue_type,
-    latest_security.status            as security_status,
-    latest_security.security_name,
-    latest_security.exchange_id,
-    latest_security.shares_outstanding,
-    latest_security.first_trade_date,
-    latest_security.first_trade_exchange_date,
-    latest_security.dividend,
-    company.company_sk
-from latest_security
-left join company
-    on (
-        latest_security.company_cik is not null
-        and latest_security.company_cik = company.company_cik
-    )
-    or (
-        latest_security.company_cik is null
-        and latest_security.company_name = company.company_name
-    )
+select * from final
+union all
+select * from unknown

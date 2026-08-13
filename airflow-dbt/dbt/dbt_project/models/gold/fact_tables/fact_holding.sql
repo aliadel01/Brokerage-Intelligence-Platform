@@ -1,10 +1,9 @@
 {#-
-    Per gold.md ADR-005: account_sk/security_sk/holding_date_sk resolved
-    entirely from fact_trade via the CURRENT/triggering trade_id
-    (HH_T_ID -> silver's `trade_id`), not originating_trade_id -- that
-    column is informational-only per ADR-006 and never used for
-    resolution. INNER JOIN is deliberate: this model must run after
-    fact_trade.
+    account_sk/security_sk/holding_date_sk resolved from fact_trade via
+    CURRENT/triggering trade_id (HH_T_ID -> silver's trade_id), per
+    ADR-005/ADR-006. INNER JOIN deliberate (must run after fact_trade).
+    fact_trade's account_sk/security_sk already coalesced to -1
+    upstream -- no re-coalesce needed here.
 -#}
 
 with holding as (
