@@ -20,7 +20,7 @@
     - [0. These points are covered in detail in `04_silver.md`, but here is a summary.](#0-these-points-are-covered-in-detail-in-04_silvermd-but-here-is-a-summary)
     - [1. dbt generic tests \& Referential integrity](#1-dbt-generic-tests--referential-integrity)
     - [2. SCD2-specific checks (account/customer)](#2-scd2-specific-checks-accountcustomer)
-    - [3. Reconciliation — bronze row count vs. silver row count](#3-reconciliation--bronze-row-count-vs-silver-row-count)
+    - [3. Reconciliation — bronze row count vs. silver row count, and silver row count vs. gold row count](#3-reconciliation--bronze-row-count-vs-silver-row-count-and-silver-row-count-vs-gold-row-count)
     - [4. Business-rule tests (custom singular tests)](#4-business-rule-tests-custom-singular-tests)
       - [Problem 1 — Illegal trade status state transitions](#problem-1--illegal-trade-status-state-transitions)
       - [Problem 2 — False versioning in tracked SCD Type 2 entities](#problem-2--false-versioning-in-tracked-scd-type-2-entities)
@@ -30,6 +30,7 @@
       - [3. `dbt_project.yml` wiring — what each new line does](#3-dbt_projectyml-wiring--what-each-new-line-does)
       - [4. How to use it day to day](#4-how-to-use-it-day-to-day)
     - [ADR: Custom test-result logging over Elementary package](#adr-custom-test-result-logging-over-elementary-package)
+    - [Accepted Values](#accepted-values)
   - [Gold Layer](#gold-layer)
     - [Unknown member rows — fact FK columns never NULL](#unknown-member-rows--fact-fk-columns-never-null)
     - [Dimension attribute NULL fill](#dimension-attribute-null-fill)
@@ -179,29 +180,56 @@ Implemented core dbt testing across the Silver layer using `not_null`, `unique`,
 - `assert_no_overlapping_date_ranges`: Guarantees SCD Type 2 timeline boundary validity, flagging any record where valid_from_date overlaps with the preceding version's valid_to_date.
 - `assert_scd2_date_continuity`: Enforces strict date chain continuity between adjacent state versions, verifying that $valid\_to\_date_{N} = valid\_from\_date_{N+1} - 1\text{ day}$ with zero gaps.
 - `assert_forward_fill_sanity`: Verifies CDC attribute propagation consistency, ensuring tracked business columns do not regression-drop to NULL across versions once initially populated.
+Updated section. Also renamed §3 header to cover both layers, added §3b for gold.
 
-### 3. Reconciliation — bronze row count vs. silver row count
+---
+
+### 3. Reconciliation — bronze row count vs. silver row count, and silver row count vs. gold row count
 
 **Problem:** dedup, collapse, and filter logic inside silver models
 (`dedup_latest`, SCD2 day-collapse, `where t_id is not null`, etc.) can
-silently drop more or fewer rows than intended. No test in `04_silver.md`
-catches a dedup step that ate too much — or too little.
+silently drop more or fewer rows than intended. Gold has the same
+exposure one layer up — FK-resolution joins, dedup-latest collapses
+(`dim_company`, `dim_security`), and inner-join lookups (`fact_holding`,
+`fact_trade_history`) can drop or multiply rows in ways no relationship
+or grain test catches. No test in `04_silver.md` or this doc's Gold
+Layer section catches a collapse step that ate too much — or too little.
 
-**How we handle it:** `run_silver_reconciliation_checks()`
-(`macros/run_silver_reconciliation_checks.sql`) runs on every `dbt build`
-via `on-run-end`. Per silver model, it compares bronze row count against
-silver row count **per `_batch_id`**, and logs one row per batch into
-`governance.dq_audit_log` — same table, same pattern as the ingestion-layer
-reconciliation check (`06_data_quality.md` Problem 8, `07_governance.md`
-DQ-as-Control).
+**How we handle it:** both checks share one core macro,
+`log_reconciliation()` (`macros/log_reconciliation.sql`) — the
+delta-percent math, severity assignment, and insert into
+`governance.dq_audit_log` live in exactly one place. Two thin wrappers
+build the layer-specific comparison and call it:
 
-- `check_type = 'silver_reconciliation'`
+- `log_silver_reconciliation()` (`macros/log_silver_reconciliation.sql`)
+  — bronze vs silver, **per `_batch_id`**.
+- `log_gold_reconciliation()` (`macros/log_gold_reconciliation.sql`)
+  — silver vs gold, **total row count**, not per-batch. Gold recomputes
+  current state in full every run and most gold tables (every dim)
+  don't carry a `_batch_id` column at all, so a per-batch comparison
+  doesn't apply the way it does for the incremental bronze→silver step.
+  One row is logged per model, `batch_id = -1` — a sentinel, same `-1`
+  convention already used for every dim's own Unknown-member row.
+  Gold's count excludes that Unknown-member row before comparing (it's
+  synthetic, not sourced from silver, so counting it would bias every
+  dim toward a false "+1" delta). Controlled by a `has_unknown_row` flag
+  per call — `true` for dims, `false` for facts.
+
+Both are run on every `dbt build` via `on-run-end`:
+`run_silver_reconciliation_checks()`
+(`macros/run_silver_reconciliation_checks.sql`) and
+`run_gold_reconciliation_checks()`
+(`macros/run_gold_reconciliation_checks.sql`).
+
+- `check_type = 'silver_reconciliation'` / `'gold_reconciliation'`
 - `severity = 'PASS'` if delta within threshold, else `'WARNING'` —
   **never fatal**, same reasoning as bronze reconciliation: a mismatch may
-  be expected behavior (dedup, day-collapse), not a bug, so a human
-  reviews it rather than the build failing automatically.
+  be expected behavior (dedup, collapse, filtered join), not a bug, so a
+  human reviews it rather than the build failing automatically.
 - Threshold is **per model**, not global, because expected delta varies
   hugely by archetype:
+
+**Silver (bronze vs silver)**
 
 | Model type | Example | Threshold | Why |
 |---|---|---|---|
@@ -211,6 +239,15 @@ DQ-as-Control).
 | Trade history (dual union, batch1 excluded from one side) | `silver_trade_history` | 30% | Structural, filtered union |
 | Account / Customer (dual-source, day-collapse, tracked-col filter) | `silver_account`, `silver_customer` | 50% | Heavy collapse by design |
 | Trade (many events -> 1 row per `trade_id`) | `silver_trade` | 80% | Collapse is the entire point of the model |
+
+**Gold (silver vs gold)**
+
+| Model type | Example | Threshold | Why |
+|---|---|---|---|
+| Dim: direct pass-through / SCD2 versioned, + Unknown row | `dim_date`, `dim_time`, `dim_statustype`, `dim_tradetype`, `dim_broker`, `dim_customer`, `dim_account`, `dim_prospect` | 2% | Near-exact 1:1 plus one synthetic row |
+| Dim: `dedup_latest` collapse, + Unknown row | `dim_company`, `dim_security` | 60% | Many silver versions -> one gold row per key, by design |
+| Fact: direct pass-through, left-join FK resolution only | `fact_trade`, `fact_cashtransaction`, `fact_watchitem`, `fact_market_history`, `fact_company_financials` | 2% | No row-dropping join |
+| Fact: inner join to `fact_trade` for derived FKs (ADR-005/010) | `fact_holding`, `fact_trade_history` | 15% | Orphan rows (unmatched `trade_id`) can drop |
 
 > [!NOTE]
 > These thresholds are starting defaults, not confirmed business
@@ -222,12 +259,21 @@ DQ-as-Control).
 
 `governance.dq_audit_log` already exists in prod (created by the
 ingestion-layer `log_dq_event()` — see `07_governance.md`); no new DDL
-needed for this check.
+needed for either check.
 
-**Code reference:** `macros/log_silver_reconciliation.sql` (generic
-logger), `macros/run_silver_reconciliation_checks.sql` (per-model calls),
-wired via `on-run-end` in `dbt_project.yml`.
+**Code reference:** `macros/log_reconciliation.sql` (shared core —
+delta/severity/insert), `macros/log_silver_reconciliation.sql` and
+`macros/log_gold_reconciliation.sql` (layer-specific comparison
+builders), `macros/run_silver_reconciliation_checks.sql` and
+`macros/run_gold_reconciliation_checks.sql` (per-model calls), wired via
+`on-run-end` in `dbt_project.yml`:
 
+```yaml
+on-run-end:
+  - "{{ run_silver_reconciliation_checks() }}"
+  - "{{ run_gold_reconciliation_checks() }}"
+  - "{{ log_test_results(results) }}"
+```
  
 ### 4. Business-rule tests (custom singular tests)
 
@@ -516,6 +562,12 @@ package added.
 a dashboard — at that point Elementary's actual value proposition kicks
 in and the trade-off flips. Until then, adding it would be an unused
 dependency, not a capability gap.
+
+### Accepted Values
+accepted_values on status/type code columns (status_type_sk, trade_type_sk domains)
+- `silver_trade_type` -> ['TMB', 'TMS', 'TSL', 'TLS', 'TLB']
+- `silver_status_type` -> ['ACTV', 'CMPT', 'CNCL', 'PNDG', 'SBMT', 'INAC']
+
 ## Gold Layer
 ### Unknown member rows — fact FK columns never NULL
 

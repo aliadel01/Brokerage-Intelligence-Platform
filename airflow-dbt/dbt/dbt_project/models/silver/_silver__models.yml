@@ -266,6 +266,7 @@ models:
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
+          - accepted_values: {values: ['ACTV', 'CMPT', 'CNCL', 'PNDG', 'SBMT', 'INAC'], config: {severity: warn}}
         config:
           meta:
             classification: public
@@ -424,6 +425,7 @@ models:
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
+          - accepted_values: {values: ['TMB', 'TMS', 'TSL', 'TLS', 'TLB'], config: {severity: warn}}
         config:
           meta:
             classification: public
