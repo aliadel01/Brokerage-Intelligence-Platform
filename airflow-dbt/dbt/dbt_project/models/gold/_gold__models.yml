@@ -14,8 +14,16 @@ models:
     columns:
       - name: account_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "passthrough: silver_account.account_version_sk (SCD2 version key, not hashed)"
             classification: internal
             pii: false
       - name: account_id
@@ -87,8 +95,16 @@ models:
     columns:
       - name: broker_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "{{ surrogate_key(['employee_id']) }} as broker_sk"
             classification: internal
             pii: false
       - name: employee_id
@@ -154,8 +170,16 @@ models:
     columns:
       - name: company_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "{{ surrogate_key(['company_cik']) }} as company_sk"
             classification: internal
             pii: false
       - name: company_cik
@@ -263,8 +287,16 @@ models:
     columns:
       - name: customer_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "passthrough: silver_customer.customer_version_sk (SCD2 version key, not hashed)"
             classification: internal
             pii: false
       - name: customer_id
@@ -510,8 +542,16 @@ models:
     columns:
       - name: date_sk
         data_type: integer
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "passthrough: silver_date.date_sk (Archetype A, not hashed)"
             classification: public
             pii: false
       - name: date_value
@@ -625,8 +665,16 @@ models:
     columns:
       - name: prospect_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "{{ surrogate_key(['agency_id']) }} as prospect_sk"
             classification: internal
             pii: false
       - name: customer_sk
@@ -776,8 +824,16 @@ models:
     columns:
       - name: security_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "{{ surrogate_key(['symbol']) }} as security_sk"
             classification: internal
             pii: false
       - name: symbol
@@ -849,8 +905,16 @@ models:
     columns:
       - name: status_type_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "{{ surrogate_key(['status_code']) }} as status_type_sk"
             classification: internal
             pii: false
       - name: status_code
@@ -874,8 +938,16 @@ models:
     columns:
       - name: time_sk
         data_type: integer
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "passthrough: cast(silver_time.time_sk as integer) (Archetype A, not hashed)"
             classification: public
             pii: false
       - name: time_value
@@ -941,8 +1013,16 @@ models:
     columns:
       - name: trade_type_sk
         data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "{{ surrogate_key(['trade_type_code']) }} as trade_type_sk"
             classification: internal
             pii: false
       - name: trade_type_code
@@ -970,26 +1050,76 @@ models:
             classification: public
             pii: false
 
-  - name: fact_cash_transaction
+  - name: fact_cashtransaction
     description: "Fact table recording monetary deposits, withdrawals, and cash movement transactions tied to customer brokerage accounts."
     config:
       contract:
         enforced: true
+    # ASSUMPTION: no documented business key for fact_cash_transaction; using FK+time grain
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - account_sk
+            - transaction_date_sk
+            - transaction_time_sk
+          config:
+            severity: error
     columns:
+      - name: cash_transaction_sk
+        data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+        config:
+          meta:
+            surrogate_key: "{{ surrogate_key(['account_sk', 'transaction_date_sk', 'transaction_time_sk']) }} as cash_transaction_sk"
+            classification: internal
+            pii: false
       - name: transaction_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: transaction_time_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_time')
+              field: time_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: account_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_account')
+              field: account_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1030,15 +1160,55 @@ models:
     config:
       contract:
         enforced: true
+    # ASSUMPTION: one financial report row per company per fiscal date
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - company_sk
+            - fiscal_date_sk
+          config:
+            severity: error
     columns:
+      - name: company_financials_sk
+        data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+        config:
+          meta:
+            surrogate_key: "{{ surrogate_key(['company_sk', 'fiscal_date_sk']) }} as company_financials_sk"
+            classification: internal
+            pii: false
       - name: company_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_company')
+              field: company_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: fiscal_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: public
@@ -1123,6 +1293,15 @@ models:
             pii: false
       - name: posting_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1133,7 +1312,32 @@ models:
     config:
       contract:
         enforced: true
+    # ASSUMPTION: one row per holding state-change event; confirm against ADR-005/ADR-010 lookup logic
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - originating_trade_id
+            - current_trade_id
+            - security_sk
+            - account_sk
+            - holding_date_sk
+          config:
+            severity: error
     columns:
+      - name: holding_sk
+        data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+        config:
+          meta:
+            surrogate_key: "{{ surrogate_key(['originating_trade_id', 'current_trade_id', 'security_sk', 'account_sk', 'holding_date_sk']) }} as holding_sk"
+            classification: internal
+            pii: false
       - name: originating_trade_id
         data_type: integer
         config:
@@ -1148,18 +1352,45 @@ models:
             pii: false
       - name: security_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_security')
+              field: security_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: holding_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: account_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_account')
+              field: account_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1200,15 +1431,54 @@ models:
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - security_sk
+            - market_date_sk
+          config:
+            severity: error
     columns:
+      - name: market_history_sk
+        data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+        config:
+          meta:
+            surrogate_key: "{{ surrogate_key(['security_sk', 'market_date_sk']) }} as market_history_sk"
+            classification: internal
+            pii: false
       - name: security_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_security')
+              field: security_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: market_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1264,8 +1534,16 @@ models:
     columns:
       - name: trade_sk
         data_type: integer
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
         config:
           meta:
+            surrogate_key: "passthrough: trade.trade_id (ADR-007, deliberately not hashed)"
             classification: internal
             pii: false
       - name: trade_id
@@ -1276,30 +1554,75 @@ models:
             pii: false
       - name: security_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_security')
+              field: security_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: trade_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: trade_time_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_time')
+              field: time_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: status_type_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_statustype')
+              field: status_type_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: trade_type_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_tradetype')
+              field: trade_type_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1324,6 +1647,15 @@ models:
             pii: false
       - name: account_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_account')
+              field: account_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1376,7 +1708,30 @@ models:
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - trade_id
+            - status_date_sk
+            - status_time_sk
+            - status_type_sk
+          config:
+            severity: error
     columns:
+      - name: trade_history_sk
+        data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+        config:
+          meta:
+            surrogate_key: "{{ surrogate_key(['trade_id', 'status_date_sk', 'status_time_sk', 'status_type_sk']) }} as trade_history_sk"
+            classification: internal
+            pii: false
       - name: trade_sk
         data_type: integer
         config:
@@ -1391,30 +1746,75 @@ models:
             pii: false
       - name: account_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_account')
+              field: account_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: security_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_security')
+              field: security_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: status_type_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_statustype')
+              field: status_type_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: status_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: status_time_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_time')
+              field: time_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1432,32 +1832,91 @@ models:
             classification: internal
             pii: false
 
-  - name: fact_watch_history
+  - name: fact_watchitem
     description: "Fact table logging customer watchlist interactions (add/remove actions) for specific securities over time."
     config:
       contract:
         enforced: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - customer_sk
+            - security_sk
+            - watch_date_sk
+            - watch_time_sk
+          config:
+            severity: error
     columns:
+      - name: watch_item_sk
+        data_type: bigint
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+        config:
+          meta:
+            surrogate_key: "{{ surrogate_key(['customer_sk', 'security_sk', 'watch_date_sk', 'watch_time_sk']) }} as watch_item_sk"
+            classification: internal
+            pii: false
       - name: customer_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_customer')
+              field: customer_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: security_sk
         data_type: bigint
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_security')
+              field: security_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: watch_date_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_date')
+              field: date_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: watch_time_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              to: ref('dim_time')
+              field: time_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal

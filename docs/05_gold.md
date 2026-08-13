@@ -22,6 +22,8 @@ introduce a column silver doesn't already have, and does not carry a
 column into gold that silver doesn't actually output, without an
 explicit decision recorded in this doc
 
+All models have SK.
+
 ## Tables intentionally not modeled
 
 | Source file | Reason |

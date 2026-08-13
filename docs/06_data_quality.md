@@ -33,6 +33,7 @@
   - [Gold Layer](#gold-layer)
     - [Unknown member rows — fact FK columns never NULL](#unknown-member-rows--fact-fk-columns-never-null)
     - [Dimension attribute NULL fill](#dimension-attribute-null-fill)
+    - [](#)
 
 
 ## Bronze and Ingestion Layer.
@@ -555,3 +556,11 @@ country, job_code, industry_name, etc.) coalesce NULL to the string
 - **Reason:** same as the FK case — a BI tool's "group by tier" should
   show a real `Unknown` bucket, not silently merge NULLs into one
   bucket or drop them depending on tool defaults.
+
+
+###
+
+- FK integrity: `relationships` tests, fact→dim, severity warn (late-arriving dim tolerance)
+-  Surrogate key: `unique` + `not_null` on every dim/fact PK, severity error
+- No NULL FK on fact tables 
+- Grain test: `unique_combination_of_columns` per fact (e.g. fact_trade_history: trade_id+status_date_sk+status_time_sk+status_type_sk)
