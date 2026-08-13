@@ -10,6 +10,7 @@
     - [ADR-002: Trade](#adr-002-trade)
     - [ADR-003: Two dedup shapes, one macro](#adr-003-two-dedup-shapes-one-macro)
     - [ADR-004: Custom `generate_schema_name` macro](#adr-004-custom-generate_schema_name-macro)
+    - [ADR-005: Incremental append materialization for Quasi-CDC](#adr-005-incremental-append-materialization-for-quasi-cdc)
 
 ## Governing principle
 
@@ -40,7 +41,7 @@ partition_by, order_by)` macro — never an inline `qualify`.
 | A. Static/reference dimensions | Date, Time, StatusType, TaxRate, Industry, TradeType, HR | Pass-through + defensive dedup. No CDC, no history. |
 | B. Real CDC | Account, Customer | SCD2, day-level grain. Account/Customer unify a flat-file source and an XML source. |
 | B. Real CDC (latest-state) | Trade | State-tracking dedup, one row per `trade_id`, latest wins — same shape as Prospect. Status-transition history is owned separately by `silver_trade_history` (see ADR-002). |
-| B. Quasi-CDC | HoldingHistory, WatchHistory, DailyMarket, CashTransaction | Append-only event log. |
+| B. Quasi-CDC | HoldingHistory, WatchHistory, DailyMarket, CashTransaction | Append-only event log. Materialized `incremental` / `append`, filtered on `_loaded_at` (ADR-005). |
 | C. Snapshot dimension | Prospect | SCD1, one row per `agency_id`, latest batch wins. |
 | D. FINWIRE | CMP, SEC, FIN | Append-only-by-PTS, Batch1 only. |
 | D. CustomerMgmt.xml | mgmt_customer, mgmt_account | Not modeled on their own. Folded into `silver_account`/`silver_customer`. |
@@ -162,3 +163,34 @@ config is used exactly as given, instead of dbt's default
 `<target_schema>_<custom_schema>` prefix.
 **Reason:** Standard, well-known dbt pattern. Not specific to this data
 model.
+
+### ADR-005: Incremental append materialization for Quasi-CDC
+**Status:** Accepted
+**Decision:**
+- HoldingHistory, WatchHistory, DailyMarket, CashTransaction are
+  materialized `incremental` with `incremental_strategy='append'`,
+  `on_schema_change='fail'`, and no `unique_key`.
+- Incremental filter: `_loaded_at > max(_loaded_at) in this)`,
+  applied on the source CTE before dedup.
+- Detailed tie-break rationale (`_batch_id desc, _cdc_dsn desc,
+  _loaded_at desc`) is not documented inline in these models beyond
+  the ordering itself. *Reason: with true insert-only sources, no
+  event legitimately produces more than one row — the dedup pass
+  only exists to catch accidental duplicate ingestion, and any
+  deterministic pick among true duplicates is equally correct. A
+  different batch naturally sorts by recency; a genuine duplicate
+  shares the same `_cdc_dsn`, so the field carries no decision
+  weight; `_loaded_at` only breaks a true tie. None of that changes
+  which row survives in practice, so it isn't worth motivating at
+  length.*
+- `on_schema_change='fail'` is a deliberate choice, not left at
+  dbt's default. *Reason: silver casts/derives columns explicitly;
+  an unexpected schema change upstream should stop the run and
+  surface for review, not silently ignore or append new columns.*
+**Reason:** These sources are true insert-only event logs — no
+event is ever revised by a later row. Re-running a full rebuild on
+every invocation re-scans and re-dedups the entire history for no
+benefit; filtering to unseen `_loaded_at` values and appending only
+the new, deduped slice gets the same result at a fraction of the
+cost. No `unique_key` is needed because there is no "latest state"
+to upsert into — every kept row is independent and permanent.

@@ -1,8 +1,13 @@
+{{
+    config(
+        materialized='incremental',
+        incremental_strategy='append',
+        on_schema_change='fail'
+    )
+}}
+
 {#-
-    Quasi-CDC append-only event log (bronze design doc, open question #3).
-    CDC_FLAG on this source doesn't reflect genuine state updates, so we
-    do NOT treat it as "latest CDC_DSN wins" for state reconstruction --
-    every row is an independent event, not a revision of a prior row.
+    Quasi-CDC append-only event log (bronze design doc).
 
     Dedup is by _row_hash only, catching TRUE duplicate ingestion (same
     business content landed more than once) -- not by any business key,
@@ -17,17 +22,19 @@
     invariants rather than blindly trusting an upstream layer's
     guarantee.
 
-    Tie-break order when a true duplicate is found: _batch_id desc,
-    _cdc_dsn desc, _loaded_at desc -- keep the most recently ingested
-    copy. _batch_id leads (not _cdc_dsn) because it's guaranteed to
-    reflect true calendar order via bronze_batch_control.asofdate, while
-    _cdc_dsn's global monotonicity across the whole CDC stream (vs. reset
-    per batch/file) is unconfirmed as of this writing (see silver.md,
-    open question #4). _loaded_at is the final tie-breaker for true ties.
+    INCREMENTAL: append-only, no unique_key. Each source row is an
+    independent event -- never a revision of a prior row -- so there is
+    nothing to upsert against. On incremental runs we only pull source
+    rows newer than the max _loaded_at already in this table, then dedup
+    that new slice the same way as a full build.
 -#}
 
 with source as (
     select * from {{ source('bronze', 'bronze_daily_market') }}
+
+    {% if is_incremental() %}
+    where _loaded_at > (select max(_loaded_at) from {{ this }})
+    {% endif %}
 ),
 
 cleaned as (
