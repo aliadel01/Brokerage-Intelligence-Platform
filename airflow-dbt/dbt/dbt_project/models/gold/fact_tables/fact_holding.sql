@@ -23,8 +23,6 @@ resolved as (
         trade.account_sk,
         holding.qty_before     as before_quantity,
         holding.qty_after      as after_quantity,
-        holding._cdc_flag      as cdc_flag,
-        holding._cdc_dsn       as cdc_dsn,
         holding._batch_id      as batch_id
     from holding
     inner join trade

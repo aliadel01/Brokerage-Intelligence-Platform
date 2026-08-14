@@ -26,8 +26,6 @@ resolved as (
         coalesce(watch_date.date_sk, -1)    as watch_date_sk,
         coalesce(watch_time.time_sk, -1)    as watch_time_sk,
         watch.watch_action    as action_code,
-        watch._cdc_flag       as cdc_flag,
-        watch._cdc_dsn        as cdc_dsn,
         watch._batch_id       as batch_id
     from watch
     left join customer

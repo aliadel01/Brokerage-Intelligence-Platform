@@ -18,8 +18,6 @@ resolved as (
         market.high_price,
         market.low_price,
         market.volume,
-        market._cdc_flag       as cdc_flag,
-        market._cdc_dsn        as cdc_dsn,
         market._batch_id       as batch_id
     from market
     left join security

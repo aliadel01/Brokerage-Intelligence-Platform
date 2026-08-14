@@ -22,8 +22,6 @@ resolved as (
         coalesce(account.account_sk, -1)  as account_sk,
         cash.amount,
         cash.description,
-        cash._cdc_flag         as cdc_flag,
-        cash._cdc_dsn          as cdc_dsn,
         cash._batch_id         as batch_id
     from cash
     left join account
