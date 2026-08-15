@@ -1,44 +1,61 @@
-
 {#-
-    Silver -> gold row-count reconciliation. Full-table comparison, not
-    per-batch: gold dims/facts recompute current state each run and
-    most gold tables don't even carry a batch_id column (dims never
-    do), unlike the incremental bronze->silver append world. So one
-    row logged per model, batch_id = -1 sentinel (same -1 convention
-    as every dim's own Unknown-member row) -- there's no single batch
-    a "total rows now" comparison belongs to.
+    Shared core for reconciliation logging. Silver (bronze vs silver,
+    per-batch) and gold (silver vs gold, total) both call this -- same
+    delta/severity math, same insert, no duplication.
 
-    Gold count excludes the synthetic Unknown member row (<dim>_sk = -1,
-    union all'd in every dim per gold.md) since it's not sourced from
-    silver -- counting it would bias every dim toward a false "+1"
-    delta. Facts don't add an Unknown row of their own (has_unknown_row
-    = false for those calls).
-
-    Same non-fatal PASS/WARNING pattern as log_silver_reconciliation --
-    delta can be correct (dedup_latest collapse, filtered inner join),
-    not a bug.
+    Caller builds comparison_sql: a query producing one row per
+    comparison unit with exactly these columns:
+      batch_id     - int. Real _batch_id for per-batch checks, or -1
+                     sentinel for total/full-table checks (same
+                     convention as the gold Unknown-member row).
+      expected_cnt - the "should be" count (bronze for silver check,
+                     silver for gold check).
+      actual_cnt   - the "actually is" count (silver for silver check,
+                     gold for gold check).
 
     Args:
-      model_name       - string, gold model name, used as source_file label
-      silver_count_sql - raw SQL string producing a single count, e.g.
-                         "select count(*) from " ~ ref('silver_hr')
-      gold_relation     - the gold model relation, e.g. ref('dim_broker')
-      threshold_pct     - % delta above which severity = WARNING.
-                          Defaults to var('reconciliation_threshold_pct', 5).
-      has_unknown_row   - whether gold_relation carries the Unknown
-                          member row to exclude from its count.
-                          Default true (every dim does); pass false for facts.
+      check_type     - string, e.g. 'silver_reconciliation' /
+                        'gold_reconciliation'. Stored as-is.
+      model_name     - string, model name, used as source_file label.
+      comparison_sql - raw SQL string, see column contract above.
+      threshold_pct  - % delta above which severity = WARNING.
+
+    Non-fatal by design: severity is PASS/WARNING only, never raises.
+    Same reasoning throughout: an expected/actual delta can be correct
+    behavior (dedup, collapse, filtered join), not a bug -- a human
+    reviews it rather than the build failing automatically.
 -#}
-{% macro log_gold_reconciliation(model_name, silver_count_sql, gold_relation, threshold_pct=None, has_unknown_row=true) %}
+{% macro log_reconciliation(check_type, model_name, comparison_sql, threshold_pct) %}
   {% if execute %}
-    {% set threshold = threshold_pct if threshold_pct is not none else var('reconciliation_threshold_pct', 5) %}
-    {% set offset = 1 if has_unknown_row else 0 %}
-    {% set comparison_sql %}
+    {% set query %}
+      with comparison as (
+        {{ comparison_sql }}
+      ),
+      scored as (
+        select
+          batch_id,
+          expected_cnt,
+          actual_cnt,
+          case
+            when expected_cnt = 0 then 0
+            else abs(expected_cnt - actual_cnt) / expected_cnt * 100
+          end as delta_pct
+        from comparison
+      )
+      insert into governance.dq_audit_log
+        (batch_id, check_type, source_file, expected_value, actual_value, severity, message)
       select
-        -1 as batch_id,
-        ({{ silver_count_sql }})                      as expected_cnt,
-        (select count(*) from {{ gold_relation }}) - {{ offset }} as actual_cnt
+        batch_id,
+        '{{ check_type }}',
+        '{{ model_name }}',
+        expected_cnt,
+        actual_cnt,
+        case when delta_pct > {{ threshold_pct }} then 'WARNING' else 'PASS' end,
+        'expected=' || expected_cnt || ' actual=' || actual_cnt ||
+        ' delta=' || round(delta_pct, 2) || '% (threshold ' || {{ threshold_pct }} || '%)'
+      from scored
     {% endset %}
-    {{ log_reconciliation('gold_reconciliation', model_name, comparison_sql, threshold) }}
+    {% do run_query(query) %}
+    {% do log('logged ' ~ check_type ~ ': ' ~ model_name, info=true) %}
   {% endif %}
 {% endmacro %}
