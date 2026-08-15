@@ -30,6 +30,14 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+
+# Test Observability & Native Failures Persistence
+# Section 6.4.2 & ADR 6.4.5 Compliance: Enforcing store_failures at root level
+tests:
+  +store_failures: true
+  +schema: dbt_test_failures
+
+  
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 #
