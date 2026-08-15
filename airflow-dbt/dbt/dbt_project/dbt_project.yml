@@ -17,10 +17,57 @@ snapshot-paths: ["snapshots"]
 
 # Configuring the "on-run-end" hook to run reconciliation checks after dbt finishes running models.
 on-run-end:
-  - "{{ run_silver_reconciliation_checks() }}"
-  - "{{ run_gold_reconciliation_checks() }}"
-  - "{{ log_test_results(results) }}"
+  - >
+    -- depends_on: {{ ref('silver_hr') }}
+    -- depends_on: {{ ref('silver_prospect') }}
+    -- depends_on: {{ ref('silver_account') }}
+    -- depends_on: {{ ref('silver_customer') }}
+    -- depends_on: {{ ref('silver_trade') }}
+    -- depends_on: {{ ref('silver_trade_history') }}
+    -- depends_on: {{ ref('silver_holding_history') }}
+    -- depends_on: {{ ref('silver_watch_history') }}
+    -- depends_on: {{ ref('silver_daily_market') }}
+    -- depends_on: {{ ref('silver_cash_transaction') }}
+    {{ run_silver_reconciliation_checks() }}
 
+  - >
+    -- depends_on: {{ ref('silver_date') }}
+    -- depends_on: {{ ref('silver_time') }}
+    -- depends_on: {{ ref('silver_status_type') }}
+    -- depends_on: {{ ref('silver_trade_type') }}
+    -- depends_on: {{ ref('silver_hr') }}
+    -- depends_on: {{ ref('silver_customer') }}
+    -- depends_on: {{ ref('silver_account') }}
+    -- depends_on: {{ ref('silver_prospect') }}
+    -- depends_on: {{ ref('silver_finwire_company') }}
+    -- depends_on: {{ ref('silver_finwire_security') }}
+    -- depends_on: {{ ref('silver_trade') }}
+    -- depends_on: {{ ref('silver_cash_transaction') }}
+    -- depends_on: {{ ref('silver_watch_history') }}
+    -- depends_on: {{ ref('silver_daily_market') }}
+    -- depends_on: {{ ref('silver_finwire_financials') }}
+    -- depends_on: {{ ref('silver_holding_history') }}
+    -- depends_on: {{ ref('silver_trade_history') }}
+    -- depends_on: {{ ref('dim_date') }}
+    -- depends_on: {{ ref('dim_time') }}
+    -- depends_on: {{ ref('dim_statustype') }}
+    -- depends_on: {{ ref('dim_tradetype') }}
+    -- depends_on: {{ ref('dim_broker') }}
+    -- depends_on: {{ ref('dim_customer') }}
+    -- depends_on: {{ ref('dim_account') }}
+    -- depends_on: {{ ref('dim_prospect') }}
+    -- depends_on: {{ ref('dim_company') }}
+    -- depends_on: {{ ref('dim_security') }}
+    -- depends_on: {{ ref('fact_trade') }}
+    -- depends_on: {{ ref('fact_cashtransaction') }}
+    -- depends_on: {{ ref('fact_watchitem') }}
+    -- depends_on: {{ ref('fact_market_history') }}
+    -- depends_on: {{ ref('fact_company_financials') }}
+    -- depends_on: {{ ref('fact_holding') }}
+    -- depends_on: {{ ref('fact_trade_history') }}
+    {{ run_gold_reconciliation_checks() }}
+
+  - "{{ log_test_results(results) }}"
 
 # setting a default variable for the reconciliation threshold percentage.
 vars:

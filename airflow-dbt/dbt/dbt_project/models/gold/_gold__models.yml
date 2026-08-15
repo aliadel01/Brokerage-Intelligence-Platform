@@ -13,7 +13,7 @@ models:
         enforced: true
     columns:
       - name: account_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -137,7 +137,7 @@ models:
             classification: restricted_pii
             pii: true
       - name: job_code
-        data_type: varchar
+        data_type: bigint
         config:
           meta:
             classification: internal
@@ -181,7 +181,7 @@ models:
             classification: internal
             pii: false
       - name: company_cik
-        data_type: varchar
+        data_type: bigint
         config:
           meta:
             classification: public
@@ -284,7 +284,7 @@ models:
         enforced: true
     columns:
       - name: customer_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -820,7 +820,7 @@ models:
         enforced: true
     columns:
       - name: security_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1060,7 +1060,7 @@ models:
             severity: error
     columns:
       - name: cash_transaction_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1132,18 +1132,6 @@ models:
           meta:
             classification: confidential
             pii: false
-      - name: cdc_flag
-        data_type: varchar
-        config:
-          meta:
-            classification: internal
-            pii: false
-      - name: cdc_dsn
-        data_type: integer
-        config:
-          meta:
-            classification: internal
-            pii: false
       - name: batch_id
         data_type: integer
         config:
@@ -1166,7 +1154,7 @@ models:
             severity: error
     columns:
       - name: company_financials_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1323,7 +1311,7 @@ models:
             severity: error
     columns:
       - name: holding_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1348,7 +1336,7 @@ models:
             classification: internal
             pii: false
       - name: security_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1407,18 +1395,6 @@ models:
           meta:
             classification: confidential
             pii: false
-      - name: cdc_flag
-        data_type: varchar
-        config:
-          meta:
-            classification: internal
-            pii: false
-      - name: cdc_dsn
-        data_type: integer
-        config:
-          meta:
-            classification: internal
-            pii: false
       - name: batch_id
         data_type: integer
         config:
@@ -1441,7 +1417,7 @@ models:
             severity: error
     columns:
       - name: market_history_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1454,7 +1430,7 @@ models:
             classification: internal
             pii: false
       - name: security_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1509,18 +1485,6 @@ models:
           meta:
             classification: public
             pii: false
-      - name: cdc_flag
-        data_type: varchar
-        config:
-          meta:
-            classification: internal
-            pii: false
-      - name: cdc_dsn
-        data_type: integer
-        config:
-          meta:
-            classification: internal
-            pii: false
       - name: batch_id
         data_type: integer
         config:
@@ -1555,7 +1519,7 @@ models:
             classification: internal
             pii: false
       - name: security_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1728,7 +1692,7 @@ models:
             severity: error
     columns:
       - name: trade_history_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1769,7 +1733,7 @@ models:
             classification: internal
             pii: false
       - name: security_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1862,7 +1826,7 @@ models:
             severity: error
     columns:
       - name: watch_item_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1891,7 +1855,7 @@ models:
             classification: internal
             pii: false
       - name: security_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1940,18 +1904,6 @@ models:
             pii: false
       - name: action_code
         data_type: varchar
-        config:
-          meta:
-            classification: internal
-            pii: false
-      - name: cdc_flag
-        data_type: varchar
-        config:
-          meta:
-            classification: internal
-            pii: false
-      - name: cdc_dsn
-        data_type: integer
         config:
           meta:
             classification: internal

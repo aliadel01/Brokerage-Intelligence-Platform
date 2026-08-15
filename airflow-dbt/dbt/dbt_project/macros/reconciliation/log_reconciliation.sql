@@ -5,7 +5,7 @@
 
     Caller builds comparison_sql: a query producing one row per
     comparison unit with exactly these columns:
-      batch_id     - int. Real _batch_id for per-batch checks, or -1
+      _batch_id     - int. Real _batch_id for per-batch checks, or -1
                      sentinel for total/full-table checks (same
                      convention as the gold Unknown-member row).
       expected_cnt - the "should be" count (bronze for silver check,
@@ -28,12 +28,14 @@
 {% macro log_reconciliation(check_type, model_name, comparison_sql, threshold_pct) %}
   {% if execute %}
     {% set query %}
+      insert into governance.dq_audit_log
+        (_batch_id, check_type, source_file, expected_value, actual_value, severity, message)
       with comparison as (
         {{ comparison_sql }}
       ),
       scored as (
         select
-          batch_id,
+          _batch_id,
           expected_cnt,
           actual_cnt,
           case
@@ -42,10 +44,8 @@
           end as delta_pct
         from comparison
       )
-      insert into governance.dq_audit_log
-        (batch_id, check_type, source_file, expected_value, actual_value, severity, message)
       select
-        batch_id,
+        _batch_id,
         '{{ check_type }}',
         '{{ model_name }}',
         expected_cnt,

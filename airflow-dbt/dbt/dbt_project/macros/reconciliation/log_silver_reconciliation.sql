@@ -33,7 +33,7 @@
         group by 1
       )
       select
-        coalesce(b._batch_id, s._batch_id) as batch_id,
+        coalesce(b._batch_id, s._batch_id) as _batch_id,
         coalesce(b.bronze_cnt, 0)          as expected_cnt,
         coalesce(s.silver_cnt, 0)          as actual_cnt
       from bronze_counts b

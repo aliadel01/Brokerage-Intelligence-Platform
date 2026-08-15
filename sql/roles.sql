@@ -134,6 +134,8 @@ GRANT ALL ON FUTURE TABLES IN SCHEMA brokerage_dwh.gold TO ROLE role_dbt_prod_ci
 GRANT USAGE ON SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod_ci;
 GRANT INSERT, SELECT ON ALL TABLES IN SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod_ci;
 
+-- Can create new schemas in the database if needed (e.g. for new dbt models)
+GRANT CREATE SCHEMA ON DATABASE BROKERAGE_DWH TO ROLE ROLE_DBT_PROD_CI;
 -- ---------------------------------------------------------------------------
 -- Note: role_bronze_loader and role_dbt_prod_ci are kept separate
 -- deliberately — Segregation of Duties. One identity that could both

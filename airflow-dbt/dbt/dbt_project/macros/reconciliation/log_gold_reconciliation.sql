@@ -1,9 +1,9 @@
 {#-
     Silver -> gold row-count reconciliation. Full-table comparison, not
     per-batch: gold dims/facts recompute current state each run and
-    most gold tables don't even carry a batch_id column (dims never
+    most gold tables don't even carry a _batch_id column (dims never
     do), unlike the incremental bronze->silver append world. So one
-    row logged per model, batch_id = -1 sentinel (same -1 convention
+    row logged per model, _batch_id = -1 sentinel (same -1 convention
     as every dim's own Unknown-member row) -- there's no single batch
     a "total rows now" comparison belongs to.
 
@@ -34,7 +34,7 @@
     {% set offset = 1 if has_unknown_row else 0 %}
     {% set comparison_sql %}
       select
-        -1 as batch_id,
+        -1 as _batch_id,
         ({{ silver_count_sql }})                      as expected_cnt,
         (select count(*) from {{ gold_relation }}) - {{ offset }} as actual_cnt
     {% endset %}

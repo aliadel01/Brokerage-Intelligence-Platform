@@ -183,7 +183,7 @@ models:
             classification: restricted_pii
             pii: true
       - name: job_code
-        data_type: varchar
+        data_type: integer
         config:
           meta:
             classification: internal
@@ -360,7 +360,7 @@ models:
             classification: public
             pii: false
       - name: time_value
-        data_type: time
+        data_type: varchar
         config:
           meta:
             classification: public
@@ -624,7 +624,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -739,6 +739,18 @@ models:
         data_type: date
         tests:
           - not_null: {config: {severity: error}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: action_ts
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _cdc_dsn
+        data_type: integer
         config:
           meta:
             classification: internal
@@ -1010,6 +1022,18 @@ models:
         data_type: date
         tests:
           - not_null: {config: {severity: error}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: action_ts
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _cdc_dsn
+        data_type: integer
         config:
           meta:
             classification: internal
@@ -1328,7 +1352,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         config:
           meta:
             classification: internal
@@ -1434,7 +1458,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         config:
           meta:
             classification: internal
@@ -1474,13 +1498,13 @@ models:
             classification: internal
             pii: false
       - name: amount
-        data_type: numeric
+        data_type: numeric(18,2)
         config:
           meta:
             classification: confidential
             pii: false
       - name: description
-        data_type: varchar
+        data_type: varchar(500)
         config:
           meta:
             classification: confidential
@@ -1504,7 +1528,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1552,19 +1576,19 @@ models:
             classification: public
             pii: false
       - name: close_price
-        data_type: numeric
+        data_type: float
         config:
           meta:
             classification: public
             pii: false
       - name: high_price
-        data_type: numeric
+        data_type: float
         config:
           meta:
             classification: public
             pii: false
       - name: low_price
-        data_type: numeric
+        data_type: float
         config:
           meta:
             classification: public
@@ -1594,7 +1618,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1665,7 +1689,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1741,7 +1765,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1885,7 +1909,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1947,7 +1971,7 @@ models:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: varchar
+        data_type: integer
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}

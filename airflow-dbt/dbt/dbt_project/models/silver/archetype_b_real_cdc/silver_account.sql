@@ -152,6 +152,8 @@ select
     cdc_flag,
     valid_from_date,
     coalesce(dateadd(day, -1, next_valid_from_date), date '9999-12-31') as valid_to_date,
+    action_ts,
+    _cdc_dsn,
     is_current,
     _batch_id,
     _source_table
