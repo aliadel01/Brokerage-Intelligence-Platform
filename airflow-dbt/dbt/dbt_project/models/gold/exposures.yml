@@ -25,13 +25,13 @@ exposures:
       - ref('dim_statustype')
       - ref('dim_time')
       - ref('dim_tradetype')
-      - ref('fact_cash_transaction')
+      - ref('fact_cashtransaction')
       - ref('fact_company_financials')
       - ref('fact_holding')
       - ref('fact_market_history')
       - ref('fact_trade')
       - ref('fact_trade_history')
-      - ref('fact_watch_history')
+      - ref('fact_watchhistory')
     owner:
       name: Analytics Engineering
       email: analytics-eng@example.com

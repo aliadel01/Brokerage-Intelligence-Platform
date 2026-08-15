@@ -155,7 +155,11 @@ models:
       - name: manager_id
         data_type: integer
         tests:
-          - relationships: {to: ref('silver_hr'), field: employee_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_hr')
+                field: employee_id
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -655,7 +659,11 @@ models:
         data_type: integer
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_hr'), field: employee_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_hr')
+                field: employee_id
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -664,7 +672,11 @@ models:
         data_type: integer
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_customer')
+                field: customer_id
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1013,7 +1025,11 @@ models:
         data_type: varchar
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_status_type'), field: status_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_status_type')
+                field: status_id
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1022,7 +1038,11 @@ models:
         data_type: varchar
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_trade_type'), field: trade_type_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_trade_type')
+                field: trade_type_id
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1059,7 +1079,11 @@ models:
         data_type: integer
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_account')
+                field: account_id
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1125,7 +1149,7 @@ models:
             classification: internal
             pii: false
 
-  - name: silver_finwire_cmp
+  - name: silver_finwire_company
     description: "Processes financial wire records containing public corporate entity details, SEC Central Index Key (CIK) mappings, credit ratings, and headquarters locations."
     config:
       contract:
@@ -1166,7 +1190,11 @@ models:
       - name: industry_id
         data_type: varchar
         tests:
-          - relationships: {to: ref('silver_industry'), field: industry_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_industry')
+                field: industry_id
+              config: {severity: warn}
         config:
           meta:
             classification: public
@@ -1250,7 +1278,7 @@ models:
             classification: internal
             pii: false
 
-  - name: silver_finwire_sec
+  - name: silver_finwire_security
     description: "Ingests security-level financial wire feeds, maintaining issue types, exchange references, outstanding shares, and security symbols."
     config:
       contract:
@@ -1365,7 +1393,11 @@ models:
         data_type: integer
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_account'), field: account_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_account')
+                field: account_id
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1446,7 +1478,11 @@ models:
         data_type: varchar
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_finwire_sec'), field: security_symbol, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_finwire_security')
+                field: security_symbol
+              config: {severity: warn}
         config:
           meta:
             classification: public
@@ -1525,7 +1561,11 @@ models:
         data_type: integer
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_trade')
+                field: trade_id
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1586,7 +1626,11 @@ models:
         data_type: integer
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_customer'), field: customer_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_customer')
+                field: customer_id
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1645,7 +1689,7 @@ models:
             classification: internal
             pii: false
 
-  - name: silver_finwire_fin
+  - name: silver_finwire_financials
     description: "Extracts quarterly financial statements and corporate earnings data (revenue, EPS, liabilities, assets, margin) from financial wire sources."
     config:
       contract:
@@ -1757,7 +1801,11 @@ models:
         data_type: varchar
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_finwire_cmp'), field: cik, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_finwire_company')
+                field: cik
+              config: {severity: warn}
         config:
           meta:
             classification: public
@@ -1798,7 +1846,11 @@ models:
         data_type: integer
         tests:
           - not_null: {config: {severity: error}}
-          - relationships: {to: ref('silver_trade'), field: trade_id, config: {severity: warn}}
+          - relationships:
+              arguments:
+                to: ref('silver_trade')
+                field: trade_id
+              config: {severity: warn}
         config:
           meta:
             classification: internal

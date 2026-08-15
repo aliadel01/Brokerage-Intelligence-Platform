@@ -231,7 +231,7 @@ final as (
 )
 
 select
-    {{ surrogate_key(['customer_id', '_batch_id', 'valid_from_date']) }} as customer_version_sk,
+    {{ gen_surrogate_key(['customer_id', '_batch_id', 'valid_from_date']) }} as customer_version_sk,
     customer_id,
     last_name,
     first_name,

@@ -55,6 +55,6 @@ resolved as (
 )
 
 select
-    {{ surrogate_key(['company_sk', 'fiscal_date_sk']) }} as company_financials_sk,
+    {{ gen_surrogate_key(['company_sk', 'fiscal_date_sk']) }} as company_financials_sk,
     *
 from resolved

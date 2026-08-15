@@ -104,7 +104,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['employee_id']) }} as broker_sk"
             classification: internal
             pii: false
       - name: employee_id
@@ -179,7 +178,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['company_cik']) }} as company_sk"
             classification: internal
             pii: false
       - name: company_cik
@@ -674,7 +672,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['agency_id']) }} as prospect_sk"
             classification: internal
             pii: false
       - name: customer_sk
@@ -833,7 +830,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['symbol']) }} as security_sk"
             classification: internal
             pii: false
       - name: symbol
@@ -914,7 +910,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['status_code']) }} as status_type_sk"
             classification: internal
             pii: false
       - name: status_code
@@ -1022,7 +1017,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['trade_type_code']) }} as trade_type_sk"
             classification: internal
             pii: false
       - name: trade_type_code
@@ -1055,13 +1049,13 @@ models:
     config:
       contract:
         enforced: true
-    # ASSUMPTION: no documented business key for fact_cash_transaction; using FK+time grain
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - account_sk
-            - transaction_date_sk
-            - transaction_time_sk
+          arguments:
+            combination_of_columns:
+              - account_sk
+              - transaction_date_sk
+              - transaction_time_sk
           config:
             severity: error
     columns:
@@ -1076,7 +1070,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['account_sk', 'transaction_date_sk', 'transaction_time_sk']) }} as cash_transaction_sk"
             classification: internal
             pii: false
       - name: transaction_date_sk
@@ -1086,8 +1079,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1101,8 +1095,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_time')
-              field: time_sk
+              arguments:
+                to: ref('dim_time')
+                field: time_sk
               config:
                 severity: warn
         config:
@@ -1116,8 +1111,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_account')
-              field: account_sk
+              arguments:
+                to: ref('dim_account')
+                field: account_sk
               config:
                 severity: warn
         config:
@@ -1160,12 +1156,12 @@ models:
     config:
       contract:
         enforced: true
-    # ASSUMPTION: one financial report row per company per fiscal date
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - company_sk
-            - fiscal_date_sk
+          arguments:
+            combination_of_columns:
+              - company_sk
+              - fiscal_date_sk
           config:
             severity: error
     columns:
@@ -1180,7 +1176,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['company_sk', 'fiscal_date_sk']) }} as company_financials_sk"
             classification: internal
             pii: false
       - name: company_sk
@@ -1190,8 +1185,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_company')
-              field: company_sk
+              arguments:
+                to: ref('dim_company')
+                field: company_sk
               config:
                 severity: warn
         config:
@@ -1205,8 +1201,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1298,8 +1295,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1312,15 +1310,15 @@ models:
     config:
       contract:
         enforced: true
-    # ASSUMPTION: one row per holding state-change event; confirm against ADR-005/ADR-010 lookup logic
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - originating_trade_id
-            - current_trade_id
-            - security_sk
-            - account_sk
-            - holding_date_sk
+          arguments:
+            combination_of_columns:
+              - originating_trade_id
+              - current_trade_id
+              - security_sk
+              - account_sk
+              - holding_date_sk
           config:
             severity: error
     columns:
@@ -1335,7 +1333,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['originating_trade_id', 'current_trade_id', 'security_sk', 'account_sk', 'holding_date_sk']) }} as holding_sk"
             classification: internal
             pii: false
       - name: originating_trade_id
@@ -1357,8 +1354,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_security')
-              field: security_sk
+              arguments:
+                to: ref('dim_security')
+                field: security_sk
               config:
                 severity: warn
         config:
@@ -1372,8 +1370,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1387,8 +1386,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_account')
-              field: account_sk
+              arguments:
+                to: ref('dim_account')
+                field: account_sk
               config:
                 severity: warn
         config:
@@ -1433,9 +1433,10 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - security_sk
-            - market_date_sk
+          arguments:
+            combination_of_columns:
+              - security_sk
+              - market_date_sk
           config:
             severity: error
     columns:
@@ -1450,7 +1451,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['security_sk', 'market_date_sk']) }} as market_history_sk"
             classification: internal
             pii: false
       - name: security_sk
@@ -1460,8 +1460,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_security')
-              field: security_sk
+              arguments:
+                to: ref('dim_security')
+                field: security_sk
               config:
                 severity: warn
         config:
@@ -1475,8 +1476,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1559,8 +1561,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_security')
-              field: security_sk
+              arguments:
+                to: ref('dim_security')
+                field: security_sk
               config:
                 severity: warn
         config:
@@ -1574,8 +1577,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1589,8 +1593,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_time')
-              field: time_sk
+              arguments:
+                to: ref('dim_time')
+                field: time_sk
               config:
                 severity: warn
         config:
@@ -1604,8 +1609,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_statustype')
-              field: status_type_sk
+              arguments:
+                to: ref('dim_statustype')
+                field: status_type_sk
               config:
                 severity: warn
         config:
@@ -1619,8 +1625,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_tradetype')
-              field: trade_type_sk
+              arguments:
+                to: ref('dim_tradetype')
+                field: trade_type_sk
               config:
                 severity: warn
         config:
@@ -1652,8 +1659,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_account')
-              field: account_sk
+              arguments:
+                to: ref('dim_account')
+                field: account_sk
               config:
                 severity: warn
         config:
@@ -1710,11 +1718,12 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - trade_id
-            - status_date_sk
-            - status_time_sk
-            - status_type_sk
+          arguments:
+            combination_of_columns:
+              - trade_id
+              - status_date_sk
+              - status_time_sk
+              - status_type_sk
           config:
             severity: error
     columns:
@@ -1729,7 +1738,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['trade_id', 'status_date_sk', 'status_time_sk', 'status_type_sk']) }} as trade_history_sk"
             classification: internal
             pii: false
       - name: trade_sk
@@ -1751,8 +1759,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_account')
-              field: account_sk
+              arguments:
+                to: ref('dim_account')
+                field: account_sk
               config:
                 severity: warn
         config:
@@ -1766,8 +1775,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_security')
-              field: security_sk
+              arguments:
+                to: ref('dim_security')
+                field: security_sk
               config:
                 severity: warn
         config:
@@ -1781,8 +1791,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_statustype')
-              field: status_type_sk
+              arguments:
+                to: ref('dim_statustype')
+                field: status_type_sk
               config:
                 severity: warn
         config:
@@ -1796,8 +1807,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1811,8 +1823,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_time')
-              field: time_sk
+              arguments:
+                to: ref('dim_time')
+                field: time_sk
               config:
                 severity: warn
         config:
@@ -1839,11 +1852,12 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - customer_sk
-            - security_sk
-            - watch_date_sk
-            - watch_time_sk
+          arguments:
+            combination_of_columns:
+              - customer_sk
+              - security_sk
+              - watch_date_sk
+              - watch_time_sk
           config:
             severity: error
     columns:
@@ -1858,7 +1872,6 @@ models:
                 severity: error
         config:
           meta:
-            surrogate_key: "{{ surrogate_key(['customer_sk', 'security_sk', 'watch_date_sk', 'watch_time_sk']) }} as watch_item_sk"
             classification: internal
             pii: false
       - name: customer_sk
@@ -1868,8 +1881,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_customer')
-              field: customer_sk
+              arguments:
+                to: ref('dim_customer')
+                field: customer_sk
               config:
                 severity: warn
         config:
@@ -1883,8 +1897,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_security')
-              field: security_sk
+              arguments:
+                to: ref('dim_security')
+                field: security_sk
               config:
                 severity: warn
         config:
@@ -1898,8 +1913,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_date')
-              field: date_sk
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
               config:
                 severity: warn
         config:
@@ -1913,8 +1929,9 @@ models:
               config:
                 severity: error
           - relationships:
-              to: ref('dim_time')
-              field: time_sk
+              arguments:
+                to: ref('dim_time')
+                field: time_sk
               config:
                 severity: warn
         config:

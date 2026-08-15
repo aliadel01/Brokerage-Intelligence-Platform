@@ -27,6 +27,6 @@ resolved as (
 )
 
 select
-    {{ surrogate_key(['security_sk', 'market_date_sk']) }} as market_history_sk,
+    {{ gen_surrogate_key(['security_sk', 'market_date_sk']) }} as market_history_sk,
     *
 from resolved

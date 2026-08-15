@@ -52,6 +52,6 @@ resolved as (
 )
 
 select
-    {{ surrogate_key(['trade_id', 'status_date_sk', 'status_time_sk', 'status_type_sk']) }} as trade_history_sk,
+    {{ gen_surrogate_key(['trade_id', 'status_date_sk', 'status_time_sk', 'status_type_sk']) }} as trade_history_sk,
     *
 from resolved

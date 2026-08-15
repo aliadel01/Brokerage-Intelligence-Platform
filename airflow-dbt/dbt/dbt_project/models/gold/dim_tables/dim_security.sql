@@ -14,7 +14,7 @@ company as (
 
 final as (
     select
-        {{ surrogate_key(['latest_security.security_symbol']) }} as security_sk,
+        {{ gen_surrogate_key(['latest_security.security_symbol']) }} as security_sk,
         latest_security.security_symbol               as symbol,
         coalesce(latest_security.issue_type, 'Unknown') as issue_type,
         coalesce(latest_security.status, 'Unknown')    as security_status,

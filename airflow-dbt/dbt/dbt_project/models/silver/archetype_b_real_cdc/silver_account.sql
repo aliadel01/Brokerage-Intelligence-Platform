@@ -142,7 +142,7 @@ final as (
 )
 
 select
-    {{ surrogate_key(['account_id', '_batch_id', 'valid_from_date']) }} as account_version_sk,
+    {{ gen_surrogate_key(['account_id', '_batch_id', 'valid_from_date']) }} as account_version_sk,
     account_id,
     broker_id,
     customer_id,

@@ -30,6 +30,6 @@ resolved as (
 )
 
 select
-    {{ surrogate_key(['originating_trade_id', 'current_trade_id', 'security_sk', 'account_sk', 'holding_date_sk']) }} as holding_sk,
+    {{ gen_surrogate_key(['originating_trade_id', 'current_trade_id', 'security_sk', 'account_sk', 'holding_date_sk']) }} as holding_sk,
     *
 from resolved

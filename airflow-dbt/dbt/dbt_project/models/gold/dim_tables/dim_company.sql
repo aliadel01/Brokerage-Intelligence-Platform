@@ -13,7 +13,7 @@ industry as (
 
 final as (
     select
-        {{ surrogate_key(['latest_company.cik']) }} as company_sk,
+        {{ gen_surrogate_key(['latest_company.cik']) }} as company_sk,
         latest_company.cik                          as company_cik,
         latest_company.company_name,
         coalesce(latest_company.status, 'Unknown')   as company_status,

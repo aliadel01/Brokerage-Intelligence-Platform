@@ -35,6 +35,6 @@ resolved as (
 )
 
 select
-    {{ surrogate_key(['account_sk', 'transaction_date_sk', 'transaction_time_sk']) }} as cash_transaction_sk,
+    {{ gen_surrogate_key(['account_sk', 'transaction_date_sk', 'transaction_time_sk']) }} as cash_transaction_sk,
     *
 from resolved

@@ -1,6 +1,6 @@
 with final as (
     select
-        {{ surrogate_key(['employee_id']) }} as broker_sk,
+        {{ gen_surrogate_key(['employee_id']) }} as broker_sk,
         employee_id,
         manager_id                         as manager_employee_id,
         first_name,

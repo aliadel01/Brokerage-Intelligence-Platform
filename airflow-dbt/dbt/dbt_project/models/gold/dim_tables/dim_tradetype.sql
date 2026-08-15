@@ -1,6 +1,6 @@
 with final as (
     select
-        {{ surrogate_key(['trade_type_id']) }} as trade_type_sk,
+        {{ gen_surrogate_key(['trade_type_id']) }} as trade_type_sk,
         trade_type_id                          as trade_type_code,
         coalesce(trade_type_name, 'Unknown')   as trade_type_name,
         is_sell_flag,

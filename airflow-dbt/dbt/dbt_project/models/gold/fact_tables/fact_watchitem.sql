@@ -41,6 +41,6 @@ resolved as (
 )
 
 select
-    {{ surrogate_key(['customer_sk', 'security_sk', 'watch_date_sk', 'watch_time_sk']) }} as watch_item_sk,
+    {{ gen_surrogate_key(['customer_sk', 'security_sk', 'watch_date_sk', 'watch_time_sk']) }} as watch_item_sk,
     *
 from resolved

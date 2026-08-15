@@ -7,7 +7,7 @@
 
 with prospect_final as (
     select
-        {{ surrogate_key(['agency_id']) }} as prospect_sk,
+        {{ gen_surrogate_key(['agency_id']) }} as prospect_sk,
         cast(null as bigint)               as customer_sk,
         agency_id,
         last_name,
