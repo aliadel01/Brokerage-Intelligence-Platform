@@ -31,7 +31,7 @@ exposures:
       - ref('fact_market_history')
       - ref('fact_trade')
       - ref('fact_trade_history')
-      - ref('fact_watchhistory')
+      - ref('fact_watchitem')
     owner:
       name: Analytics Engineering
       email: analytics-eng@example.com

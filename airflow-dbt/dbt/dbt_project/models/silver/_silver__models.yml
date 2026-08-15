@@ -270,7 +270,10 @@ models:
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
-          - accepted_values: {values: ['ACTV', 'CMPT', 'CNCL', 'PNDG', 'SBMT', 'INAC'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['ACTV', 'CMPT', 'CNCL', 'PNDG', 'SBMT', 'INAC']
+              config: {severity: warn}
         config:
           meta:
             classification: public
@@ -318,7 +321,12 @@ models:
       - name: tax_rate
         data_type: numeric
         tests:
-          - dbt_utils.accepted_range: {min_value: 0, max_value: 1, inclusive: true, config: {severity: warn}}
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+              config: {severity: warn}
         config:
           meta:
             classification: public
@@ -429,7 +437,10 @@ models:
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
-          - accepted_values: {values: ['TMB', 'TMS', 'TSL', 'TLS', 'TLB'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['TMB', 'TMS', 'TSL', 'TLS', 'TLB']
+              config: {severity: warn}
         config:
           meta:
             classification: public
@@ -635,7 +646,8 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [account_id, _batch_id, valid_from_date]
+          arguments:
+            combination_of_columns: [account_id, _batch_id, valid_from_date]
           config: {severity: error}
     columns:
       - name: account_version_sk
@@ -696,7 +708,10 @@ models:
       - name: status_id
         data_type: varchar
         tests:
-          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['ACTV', 'INAC']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -704,7 +719,10 @@ models:
       - name: cdc_flag
         data_type: varchar
         tests:
-          - accepted_values: {values: ['I', 'U'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['I', 'U']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -742,7 +760,10 @@ models:
       - name: _source_table
         data_type: varchar
         tests:
-          - accepted_values: {values: ['bronze_account', 'bronze_mgmt_account'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['bronze_account', 'bronze_mgmt_account']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -755,7 +776,8 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [customer_id, _batch_id, valid_from_date]
+          arguments:
+            combination_of_columns: [customer_id, _batch_id, valid_from_date]
           config: {severity: error}
     columns:
       - name: customer_version_sk
@@ -796,7 +818,10 @@ models:
       - name: gender
         data_type: varchar
         tests:
-          - accepted_values: {values: ['M', 'F'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['M', 'F']
+              config: {severity: warn}
         config:
           meta:
             classification: restricted_pii
@@ -954,7 +979,10 @@ models:
       - name: status_id
         data_type: varchar
         tests:
-          - accepted_values: {values: ['ACTV', 'INAC'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['ACTV', 'INAC']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -962,7 +990,10 @@ models:
       - name: cdc_flag
         data_type: varchar
         tests:
-          - accepted_values: {values: ['I', 'U'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['I', 'U']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1000,7 +1031,10 @@ models:
       - name: _source_table
         data_type: varchar
         tests:
-          - accepted_values: {values: ['bronze_customer', 'bronze_mgmt_customer'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['bronze_customer', 'bronze_mgmt_customer']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1062,7 +1096,11 @@ models:
       - name: quantity
         data_type: numeric
         tests:
-          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: false
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1070,7 +1108,11 @@ models:
       - name: bid_price
         data_type: numeric
         tests:
-          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: false
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1097,7 +1139,11 @@ models:
       - name: trade_price
         data_type: numeric
         tests:
-          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: false
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1105,7 +1151,11 @@ models:
       - name: charge
         data_type: numeric
         tests:
-          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: false
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1113,7 +1163,11 @@ models:
       - name: commission
         data_type: numeric
         tests:
-          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: false
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1121,7 +1175,11 @@ models:
       - name: tax
         data_type: numeric
         tests:
-          - dbt_expectations.expect_column_values_to_be_between: {min_value: 0, strictly: false, config: {severity: warn}}
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: false
+              config: {severity: warn}
         config:
           meta:
             classification: confidential
@@ -1129,7 +1187,10 @@ models:
       - name: cdc_flag
         data_type: varchar
         tests:
-          - accepted_values: {values: ['I', 'U'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['I', 'U']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1156,7 +1217,8 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [posting_ts, cik]
+          arguments:
+            combination_of_columns: [posting_ts, cik]
           config: {severity: error}
     columns:
       - name: posting_ts
@@ -1285,7 +1347,8 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [posting_ts, security_symbol]
+          arguments:
+            combination_of_columns: [posting_ts, security_symbol]
           config: {severity: error}
     columns:
       - name: posting_ts
@@ -1463,7 +1526,8 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [market_date, security_symbol]
+          arguments:
+            combination_of_columns: [market_date, security_symbol]
           config: {severity: error}
     columns:
       - name: market_date
@@ -1650,7 +1714,10 @@ models:
       - name: watch_action
         data_type: varchar
         tests:
-          - accepted_values: {values: ['ACTV', 'CNCL'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['ACTV', 'CNCL']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
@@ -1696,7 +1763,8 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [posting_ts, company_cik]
+          arguments:
+            combination_of_columns: [posting_ts, company_cik]
           config: {severity: error}
     columns:
       - name: posting_ts
@@ -1839,7 +1907,8 @@ models:
         enforced: true
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [trade_id, status_ts, status_id]
+          arguments:
+            combination_of_columns: [trade_id, status_ts, status_id]
           config: {severity: error}
     columns:
       - name: trade_id
@@ -1895,7 +1964,10 @@ models:
       - name: _source_model
         data_type: varchar
         tests:
-          - accepted_values: {values: ['bronze_trade_history', 'bronze_trade'], config: {severity: warn}}
+          - accepted_values:
+              arguments:
+                values: ['bronze_trade_history', 'bronze_trade']
+              config: {severity: warn}
         config:
           meta:
             classification: internal
