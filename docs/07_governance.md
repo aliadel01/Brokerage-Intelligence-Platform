@@ -1,101 +1,122 @@
-# Governance, Compliance and Ownership
+# 7. Data Governance, Compliance & Ownership
 
-This document outlines the governance, compliance, and ownership practices for the data platform.
+**Scope:** brokerage data platform (TPC-DI derived), Snowflake + dbt + Python
+ingestion. This document is the governance reference for the platform —
+who owns what, who can see what, how sensitive data is controlled, how
+long it lives, and how the platform proves any of that to an auditor.
 
-## Table of Contents
-  1. [Roles & Access Control](#roles--access-control)
-  2. [Ownership](#ownership)
-  3. [Data Classification](#data-classification)
-  4. [PII Masking Policies](#pii-masking-policies)
-  5. [DQ-as-Control on Ingestion](#dq-as-control-on-ingestion)
-  6. [Retention & Erasure](#retention--erasure)
-  7. [Historical Reconstruction and Access Auditing](#historical-reconstruction-and-access-auditing)
-  8. [Regulatory Mapping](#regulatory-mapping)
-  9. [Exposures](#exposures)
+It is written to double as an interview/portfolio artifact: each section
+maps to a standard data-governance discipline (DAMA-DMBOK terminology),
+states the decision made here, and points at the concrete SQL/code that
+enforces it. Governance that isn't enforced in the warehouse is just a
+wiki page — every control below has a Snowflake object, a dbt config, or
+a table behind it, not only a policy statement.
 
-## Roles & Access Control
+## Table of contents
+- [7. Data Governance, Compliance \& Ownership](#7-data-governance-compliance--ownership)
+  - [Table of contents](#table-of-contents)
+  - [7.1 Governance Model \& Roles](#71-governance-model--roles)
+  - [7.2 Ownership \& Stewardship](#72-ownership--stewardship)
+  - [7.3 Data Classification](#73-data-classification)
+    - [Enforcement — the Snowflake tag is the source of truth](#enforcement--the-snowflake-tag-is-the-source-of-truth)
+  - [7.4 Data Lineage](#74-data-lineage)
+    - [Row-level lineage — the metadata envelope](#row-level-lineage--the-metadata-envelope)
+    - [Table/model-level lineage — the dbt DAG](#tablemodel-level-lineage--the-dbt-dag)
+  - [7.5 Metadata Management and Data Catalogs](#75-metadata-management-and-data-catalogs)
+  - [7.6 Access Control Paradigms](#76-access-control-paradigms)
+  - [7.7 PII Masking \& Privacy Controls](#77-pii-masking--privacy-controls)
+  - [7.8 Data Retention and Lifecycle Policies](#78-data-retention-and-lifecycle-policies)
+    - [Retention policy](#retention-policy)
+    - [Erasure (right-to-be-forgotten) mechanics](#erasure-right-to-be-forgotten-mechanics)
+  - [7.9 Operational Auditability](#79-operational-auditability)
+    - [Restricted-PII access auditing](#restricted-pii-access-auditing)
+    - [Point-in-time reconstruction](#point-in-time-reconstruction)
+    - [DQ-as-Control on ingestion](#dq-as-control-on-ingestion)
+    - [Operational logging (`logging_setup.py`)](#operational-logging-logging_setuppy)
+  - [7.10 Regulatory Compliance Mapping](#710-regulatory-compliance-mapping)
+  - [7.11 Data Exposures \& Downstream Consumers](#711-data-exposures--downstream-consumers)
+  - [Open items](#open-items)
 
-Five roles, split along two axes: **service account vs. human login**, and
-**what layer they can see**. See `sql/roles.sql` for the full grant script.
+---
 
-1. **`role_bronze_loader`** — **service account**, no human login. **Owns bronze
-   only**: `SELECT`/`INSERT`/`DELETE` on every bronze table, plus
-   `READ`/`WRITE` on the ingestion stage. This is the identity the Python
-   ingestion pipeline (`main.py`) authenticates as — never a human
-   credential. Also has `INSERT`/`SELECT` on `governance.dq_audit_log` to
-   log reconciliation mismatches.
+## 7.1 Governance Model & Roles
 
-2. **`role_custodian`** — **human login**, **read-only** across all three layers
-   ***(bronze, silver, gold)***, plus read access to `governance`. This is the
-   "sees everything unmasked" role: the masking policies below explicitly
-   check for this role (or `ACCOUNTADMIN`) to return real PII values. In
-   practice, this is the project owner/maintainer — the one identity
-   trusted to see raw data end-to-end for debugging, audits, and
-   verification.
+**Theory:** governance starts with an access model, not a policy
+document. This platform uses **Role-Based Access Control (RBAC)** at the
+warehouse layer — Snowflake's native `ROLE` object — rather than
+per-user grants. RBAC is the standard paradigm for a small platform team;
+see [7.6](#76-access-control-paradigms) for why RBAC was chosen over
+attribute-based control (ABAC) here.
 
-3. **`role_analyst`** — **human login**, **read-only** across ***silver and gold***
-   only. No bronze access at all (enforced by explicit `REVOKE`, not just
-   omission). `restricted_pii` columns appear masked (`***MASKED***` /
-   `NULL`) to this role, since it falls outside the unmask condition in
-   the masking policies. `confidential` columns (including the prospect
-   financial attributes above) are **not** masked and are visible to this
-   role. Represents any downstream consumer who needs the modeled data
-   but has no business reason to see raw bronze or unmasked identity PII.
+Five roles, split along two axes: **service account vs. human login**,
+and **which layer they may see**. Full grant script: `sql/roles.sql`.
 
-4. **`role_dbt_prod_ci`** — **service account** for dbt runs, no human login.
-   **Read-only on bronze** (dbt selects from it, never writes to it), full
-   build rights (`CREATE TABLE`/`CREATE VIEW`/`ALL`) on silver and gold —
-   this is the role that actually materializes the dbt models. Also logs
-   to `governance.dq_audit_log` (e.g. failed dbt tests). Kept deliberately
-   separate from `role_bronze_loader` — Segregation of Duties: one
-   identity able to both write raw bronze *and* rebuild every downstream
-   transformation would mean a single compromised credential (or a single
-   bug) could corrupt the entire pipeline end-to-end, with no boundary in
-   between.
+| Role | Identity type | Layer access | Purpose |
+|---|---|---|---|
+| `role_bronze_loader` | Service account (Python ingestion) | Bronze only — `SELECT`/`INSERT`/`DELETE`, stage `READ`/`WRITE` | The identity `main.py` authenticates as. Never a human credential. Also `INSERT`/`SELECT` on `governance.dq_audit_log`. |
+| `role_custodian` | Human | Bronze + Silver + Gold, read-only, plus `governance` | The "sees everything unmasked" role. Masking policies explicitly unmask for this role (and `ACCOUNTADMIN`). In practice the platform owner — trusted for debugging, audits, verification. |
+| `role_analyst` | Human | Silver + Gold, read-only | No bronze access — enforced by explicit `REVOKE`, not omission. `restricted_pii` columns render masked. `confidential` columns are visible. Represents any downstream BI/analytics consumer. |
+| `role_dbt_prod_ci` | Service account (dbt runs) | Bronze read-only; full build rights on Silver + Gold | The identity that materializes dbt models. Logs to `governance.dq_audit_log` (e.g. failed tests). |
+| `role_steward` | Human | Silver + Gold, read-only | Owns *business meaning* — definitions, classification correctness, whether logic still matches the business. `restricted_pii` stays masked, same as `role_analyst`. Recorded as `data_steward` in model `meta`. |
 
-5. **`role_steward`** — **human login**, **read-only** on silver and gold
-   (no bronze). Distinct from `role_custodian`: the steward owns the
-   *business meaning* of a model (definitions, classification correctness,
-   whether a metric still matches what the business expects) — not raw,
-   unmasked debugging access across all three layers. `restricted_pii`
-   stays masked to this role, same as `role_analyst`. This is the identity
-   recorded as `data_steward` in model `meta` (see Ownership below).
+**Design principle — Segregation of Duties (SoD):** `role_bronze_loader`
+and `role_dbt_prod_ci` are kept deliberately separate. One identity able
+to both write raw bronze *and* rebuild every downstream transformation
+would mean a single compromised credential, or a single bug, could
+corrupt the pipeline end-to-end with no boundary in between. This is the
+same principle an external auditor checks for in a SOX-scoped system —
+no single account should be able to both create and certify its own
+data.
 
-## Ownership
+
+
+---
+
+## 7.2 Ownership & Stewardship
+
+**Theory:** DAMA-DMBOK draws a hard line between **data ownership**
+(accountable for the asset existing and being correct) and **data
+stewardship** (accountable for its business meaning). This platform
+encodes that distinction directly in dbt model metadata rather than
+leaving it as an org-chart assumption.
 
 Every silver and gold model carries three `meta` fields, set once as a
-project-wide default in `dbt_project.yml` (`+meta` under `models.silver`
-and `models.gold`) rather than repeated per model in the `.yml` schema
-files — dbt merges `meta` down through folder-level config, so one
-project-level block covers every model in that folder, including
-subfolders (`archetype_a`, `fact_tables`, etc.), and a specific model can
-still override any single field in its own schema.yml if it ever needs a
-different owner. `sources.yml` has no equivalent inheritance mechanism —
-`bronze` is a single source, so its `meta` is set once directly on the
-source.
+project-wide default (`+meta` under `models.silver` / `models.gold` in
+`dbt_project.yml`) rather than repeated per model — dbt merges `meta`
+down through folder-level config, including subfolders
+(`archetype_a/`, `fact_tables/`, etc.). Any individual model can still
+override a single field in its own `schema.yml`. `sources.yml` has no
+equivalent inheritance mechanism, so `bronze`'s `meta` is set once
+directly on the source.
 
 | Field | Meaning | Current value |
 |---|---|---|
-| `owner` | The project/team accountable for the layer overall. | `brokerage-data-platform` |
-| `data_steward` | Owns business meaning — definitions, classification correctness, whether logic still matches what the business expects. | `role_steward` |
-| `technical_owner` | Owns the pipeline/code — who gets paged when a load or a model build breaks. | `role_custodian` |
+| `owner` | Team accountable for the layer overall | `brokerage-data-platform` |
+| `data_steward` | Owns business meaning — definitions, classification correctness, whether logic still matches the business | `role_steward` |
+| `technical_owner` | Owns the pipeline/code — who gets paged when a load or model build breaks | `role_custodian` |
 
-Right now `role_steward` and `role_custodian` are the same person playing
-both roles on a one-person project — recorded as two distinct roles
-regardless, so the split is already in place (grants, docs, `meta`
-values) the moment a second person joins and only one of the two hats
-needs handing off.
+Today `role_steward` and `role_custodian` are the same person wearing
+two hats on a one-person project. Both roles are still recorded
+distinctly — the grants, docs, and `meta` values already reflect the
+split, so onboarding a second person only requires re-pointing one
+field, not redesigning the model.
 
-## Data Classification
 
-Classification happens where the value first lands, not where it's first
-"understood." Bronze carries the same raw PII/financial values silver
-does — a customer's name is just as sensitive as raw CDC as it is after
-SCD2 modeling — so classification starts at ingestion, not at silver.
-What's deferred to silver is *business meaning* (current status, deduped
-state), not *sensitivity*.
 
-Four levels are used, in ascending sensitivity:
+---
+
+## 7.3 Data Classification
+
+**Theory:** classification is the prerequisite for every downstream
+control (masking, retention, regulatory scoping). The governing rule
+here: **classify at the point data first lands, not at the point it's
+first "understood."** Bronze carries the exact same raw PII and
+financial values silver does — a customer's name is exactly as
+sensitive in raw CDC form as it is after SCD2 modeling. What silver
+adds is *business meaning* (current status, deduped state), not
+*sensitivity* — so classification is applied starting at ingestion.
+
+Four levels, ascending sensitivity:
 
 | Level | Meaning | Example |
 |---|---|---|
@@ -104,8 +125,6 @@ Four levels are used, in ascending sensitivity:
 | `confidential` | Business-sensitive, SOX-relevant | trade prices, account IDs, company financials |
 | `restricted_pii` | Personal data, GDPR-relevant | customer name, tax ID, address, phone, email, DOB |
 
-Also we added a description to each model in the `_silver__models.yml` and `_gold__models.yml` files, so that when you run `dbt docs generate`, the documentation will show the classification of each column next to its definition.
-
 ### Enforcement — the Snowflake tag is the source of truth
 
 ```sql
@@ -113,15 +132,12 @@ CREATE TAG IF NOT EXISTS data_classification
     ALLOWED_VALUES 'public', 'internal', 'confidential', 'restricted_pii';
 ```
 
-Every PII/financial column across all tables — bronze, silver, and gold —
-is tagged directly at the warehouse level via
-`ALTER TABLE ... MODIFY COLUMN ... SET TAG`. This is deliberate: the tag
-is queryable and enforceable regardless of which tool (dbt, a raw SQL
-client, a BI tool) touches the column — it doesn't depend on anyone
-reading documentation first.
-
-See `sql/classification_tags.sql` for the full tagging script, covering
-bronze (archetypes A–E), silver, and gold.
+Every PII/financial column across bronze, silver, and gold is tagged
+directly at the warehouse level via `ALTER TABLE ... MODIFY COLUMN ...
+SET TAG` (`sql/classification_tags.sql`, covers bronze archetypes A–E,
+silver, gold). This is deliberate: the tag is queryable and enforceable
+regardless of which tool touches the column — dbt, a raw SQL client, a
+BI tool — it does not depend on anyone reading documentation first.
 
 ```sql
 SELECT OBJECT_NAME, COLUMN_NAME, TAG_VALUE
@@ -131,116 +147,289 @@ FROM TABLE(
     )
 ) LIMIT 5;
 ```
+
 | OBJECT_NAME | COLUMN_NAME | TAG_VALUE |
-| :--- | :--- | :--- |
+|---|---|---|
 | BRONZE_CUSTOMER | C_ID | confidential |
 | BRONZE_CUSTOMER | C_TIER | confidential |
 | BRONZE_CUSTOMER | C_ST_ID | internal |
 | BRONZE_CUSTOMER | C_LCL_TX_ID | internal |
 | BRONZE_CUSTOMER | C_NAT_TX_ID | internal |
 
-
-### Restricted PII Access Audit Example 
-
-
-Snowflake `ACCESS_HISTORY` is used to audit access to columns classified as restricted_pii.
-
-For the `silver_hr` example, the restricted columns are:
-
-`first_name`, `last_name`, `middle_initial`, `phone`
-
-The audit is scoped to the last 30 days and returns the time, user, query ID,
-and SQL text for queries that accessed at least one of these columns.
-You can find an example query in `sql/restricted_pii_access_history.sql`
-
-This provides an operational audit trail answering:
-
-> Who accessed restricted PII, when did they access it, and which query did they use?
-### Documentation — schema.yml for all layers mirrors the tag
-
-`meta.classification` is set on the same columns in
-`sources.yml` / `_silver__models.yml` / `_gold__models.yml`, so the
-classification is visible directly in `dbt docs generate` output next to
-each column's definition — useful for anyone reading the model without
-querying Snowflake directly. **The Snowflake tag is authoritative; the
-YAML is a mirror of it, not a second source of truth.**
+**Documentation mirror:** `meta.classification` is set on the same
+columns in `sources.yml` / `_silver__models.yml` / `_gold__models.yml`,
+so classification is visible directly in `dbt docs generate` output
+next to each column's definition. **The Snowflake tag is authoritative;
+the YAML is a mirror of it, not a second source of truth** — if the two
+ever disagree, the tag wins and the YAML is stale.
 
 
+---
 
-## PII Masking Policies
+## 7.4 Data Lineage
 
-The control rules that enforce classification policy on `restricted_pii`
-columns live in `governance` too (see `sql/masking_policy`), as reusable
-policy definitions rather than one-off logic per table:
+**Theory:** lineage answers "where did this value come from, and what
+touched it on the way here" — required both for debugging (trace a bad
+gold number back to its source row) and for regulatory audit (SOX,
+GDPR both require the ability to reconstruct provenance). This platform
+implements lineage at two levels: **column/table lineage** (dbt's
+native DAG) and **row-level lineage** (the metadata envelope carried on
+every row).
 
-- **Masking policies** (`mask_pii_string`, `mask_pii_date`,
-  `mask_pii_numeric`) — applied per-column via
-  `ALTER TABLE ... SET MASKING POLICY` on `restricted_pii` columns across
-  bronze, silver, and gold. Enforcement is role-based via
-  `CURRENT_ROLE()`: `role_custodian` and `ACCOUNTADMIN` see real values,
-  every other role (including `role_analyst`) sees the masked form —
-  automatically, on every query, with no per-query logic needed on the
-  consumer's side.
-- `mask_pii_numeric`, `mask_pii_date` return `NULL` for masked values, since a numeric or date value has no
-  obvious "masked" string representation. `mask_pii_string` returns
-  `***MASKED***` for masked string values.
+### Row-level lineage — the metadata envelope
 
-**Real Example**:
+Every bronze row carries:
+
+| Column | Purpose |
+|---|---|
+| `_batch_id` | Which load batch produced this row |
+| `_source_file` | Exact filename ingested |
+| `_loaded_at` | Ingestion wall-clock time |
+| `_row_hash` | Deterministic hash of business columns — dedup/QA signal |
+| `_dq_errors` | Structured cast-failure evidence (see `06_data_quality.md`, §6.1) |
+
+This envelope survives into silver as `_batch_id` (carried forward for
+lineage) and, on the quasi-CDC/CDC models, `_cdc_flag`/`_cdc_dsn` where
+relevant. `silver_trade_history` additionally carries a `_source_model`
+column recording which of the two unified bronze sources
+(`bronze_trade_history` vs. `bronze_trade`) produced a given row — an
+explicit lineage marker rather than an implicit proxy like `_batch_id =
+1`. `fact_trade_history` mirrors this as `source_model` in gold.
+
+### Table/model-level lineage — the dbt DAG
+
+Every dbt model's `ref()`/`source()` graph is a complete, queryable
+lineage map from raw file to gold table, visualized automatically by
+`dbt docs generate`. Because every column on a gold table is required
+to trace to a silver column — either directly or via a documented
+resolution join (see `05_gold.md`'s governing principle) — the DAG is
+not just a dependency graph, it's an audit trail: "how was this gold
+column derived" always has a one-hop or two-hop answer, never a black
+box.
+
+
+---
+
+## 7.5 Metadata Management and Data Catalogs
+
+**Theory:** metadata management is the discipline of keeping
+*data about the data* — definitions, classification, ownership, test
+coverage, freshness — as accurate and discoverable as the data itself.
+Without it, governance controls exist in code but are invisible to
+anyone who isn't reading SQL DDL.
+
+This platform's catalog is **`dbt docs generate`**, backed by:
+
+- **Descriptions** on every source and model, in `sources.yml`,
+  `_silver__models.yml`, `_gold__models.yml` — human-readable
+  definitions, not just column names.
+- **Classification metadata** (`meta.classification`), mirroring the
+  Snowflake tags from [7.3](#73-data-classification), rendered next to
+  each column.
+- **Ownership metadata** (`meta.owner` / `data_steward` /
+  `technical_owner`), from [7.2](#72-ownership--stewardship).
+- **Test coverage**, rendered per column (`not_null`, `unique`,
+  `accepted_values`, `relationships` — see `06_data_quality.md`, §6.1) so a
+  reader can see which columns are actually validated, not just
+  documented.
+- **Lineage graph**, from [7.4](#74-data-lineage).
+- **Exposures** ([7.11](#211-data-exposures--downstream-consumers)),
+  which extend the catalog past the warehouse boundary into actual
+  downstream consumers (dashboards, ML models, reverse-ETL syncs).
+
+This is a **passive/embedded catalog** (metadata lives with the code
+that produces it, generated on build) rather than an **active catalog**
+(a separate tool like Collibra/Alation/Atlan/DataHub scanning the
+warehouse independently). For a platform of this size, the dbt-native
+catalog keeps documentation and code from drifting apart — there is no
+second system to keep in sync. Revisit only if the org needs
+cross-platform discovery (data outside dbt's reach) or business-user
+self-service search, which are the actual differentiators of a
+dedicated catalog product.
+
+
+
+---
+
+## 7.6 Access Control Paradigms
+
+**Theory:** two dominant paradigms exist for controlling who can see
+what: **RBAC** (permissions attached to a role, users assigned to
+roles) and **ABAC** (permissions evaluated dynamically against
+attributes of the user, the data, and the context — e.g. "allow if
+`user.department = data.department`"). RBAC is simpler to audit (a
+fixed, enumerable set of roles and grants); ABAC is more expressive but
+harder to reason about and test.
+
+**Decision:** RBAC, via Snowflake's native `ROLE` grant model
+([7.1](#71-governance-model--roles)), layered with
+**policy-based dynamic masking** ([7.7](#77-pii-masking--privacy-controls))
+for the one case that genuinely needs a runtime, condition-based
+decision (unmask PII only for specific roles). This is a hybrid, not
+pure RBAC — the masking policy's `CURRENT_ROLE()` check is a narrow,
+deliberate use of an attribute-style condition inside an otherwise
+role-based model, not a full ABAC system.
+
+**Reason RBAC over full ABAC here:** five roles across three layers is
+small enough to enumerate, grant, and audit directly (`SHOW GRANTS TO
+ROLE ...`). A full ABAC system (row-level attribute policies, e.g.
+region- or department-scoped access) would add real value once the
+consumer base is heterogeneous enough to need it — not yet the case for
+a single analyst/steward/custodian population.
+
+Access is enforced at three points, from broadest to narrowest:
+
+1. **Layer-level** — `GRANT`/`REVOKE` on schemas/tables per role
+   ([7.1](#71-governance-model--roles)).
+2. **Column-level** — masking policies on `restricted_pii` columns
+   ([7.7](#77-pii-masking--privacy-controls)).
+3. **Row-level** — not currently implemented (no row-access policy in
+   use); flagged as an open item below since a future multi-tenant or
+   multi-region requirement would need it.
+
+
+
+---
+
+## 7.7 PII Masking & Privacy Controls
+
+Reusable masking policies live in `governance`
+(`sql/masking_policy`), applied per column rather than duplicated per
+table:
+
+- **Policies:** `mask_pii_string`, `mask_pii_date`, `mask_pii_numeric`
+  — applied via `ALTER TABLE ... SET MASKING POLICY` on every
+  `restricted_pii` column, across bronze, silver, and gold.
+- **Enforcement condition:** `CURRENT_ROLE()`. `role_custodian` and
+  `ACCOUNTADMIN` see real values; every other role — including
+  `role_analyst` — sees the masked form. This is evaluated automatically
+  on every query; no per-query logic needed on the consumer side.
+- **Masked representation:** `mask_pii_string` returns `***MASKED***`.
+  `mask_pii_numeric`/`mask_pii_date` return `NULL`, since a numeric or
+  date value has no natural masked string form.
+
+**Example — `silver_hr.middle_initial`:**
 
 ```sql
 SELECT middle_initial FROM brokerage_dwh.silver.silver_hr LIMIT 5;
 ```
 
-<div style="display: flex; gap: 20px;">
+| As `role_analyst` (masked) | As `role_custodian` (unmasked) |
+|---|---|
+| `***MASKED***` | `R` |
+| `***MASKED***` | `X` |
+| `***MASKED***` | `N` |
+| `***MASKED***` | `V` |
+| `***MASKED***` | `I` |
 
-  <div style="flex: 1;">
 
-  ### Masked State using `role_analyst`
 
-  | # | MIDDLE_INITIAL |
-  |---|---|
-  | 1 | \*\*\*MASKED\*\*\* |
-  | 2 | \*\*\*MASKED\*\*\* |
-  | 3 | \*\*\*MASKED\*\*\* |
-  | 4 | \*\*\*MASKED\*\*\* |
-  | 5 | \*\*\*MASKED\*\*\* |
-  </div>
+---
 
-  <div style="flex: 1;">
+## 7.8 Data Retention and Lifecycle Policies
 
-  ### Unmasked State using `role_custodian`
+**Theory:** a lifecycle policy states, for every class of data, how
+long it is kept, in what form, and what happens at end-of-life
+(deletion, anonymization, archival). GDPR's storage-limitation
+principle and the right to erasure both require this to be a documented,
+executable policy — not an ad hoc decision made at deletion time.
 
-  | # | MIDDLE_INITIAL |
-  |---|---|
-  | 1 | R |
-  | 2 | X |
-  | 3 | N |
-  | 4 | V |
-  | 5 | I |
+### Retention policy
 
-  </div>
+Raw PII is retained for **90 days** at the bronze layer, to support
+recovery, debugging, and controlled reprocessing, balanced against
+unnecessary long-term exposure of raw identity data:
 
-</div>
+```sql
+ALTER TABLE bronze_customer
+SET DATA_RETENTION_TIME_IN_DAYS = 90;
+```
 
-## Historical Reconstruction and Access Auditing
+Silver/gold retention is effectively indefinite by current design (SCD2
+history is kept forever — see [7.10](#210-regulatory-compliance-mapping),
+GDPR-style entry, for the accepted tension this creates with erasure
+rights).
 
-Governance is not only about defining who can access data or how PII is
-masked. It also requires being able to answer two operational questions:
+### Erasure (right-to-be-forgotten) mechanics
 
-1. What did an account look like at a specific point in time?
-2. Who accessed restricted PII?
+`erasure_log` is the permanent record of what was erased, when, and by
+whom:
 
-The following SQL artifacts provide those two controls for the Silver layer.
+| Column | Purpose |
+|---|---|
+| `erasure_id` | Unique identifier per request |
+| `customer_id` | Subject of the request |
+| `requested_at` / `erased_at` | Request vs. execution timestamp |
+| `reason` | Why erasure was requested |
+| `status` | Current state of the request |
+| `affected_layers` | Which layers were touched |
+| `requested_by` | Person/system that made the request |
+| `notes` | Free-text context |
 
-### Point-in-Time Reconstruction — `silver_account`
+**Mechanism:** PII columns are set to `NULL` in the affected layers;
+rows themselves are **never deleted**. Deleting rows would break
+referential integrity and defeat point-in-time reconstruction
+([7.9](#79-operational-auditability)). Nullifying preserves the
+row's structural role (foreign keys, grain, historical counts) while
+removing the actual personal data.
 
-The `silver_account` model maintains versioned account records with
-`valid_from_date` and `valid_to_date`. This allows the model to reconstruct
-the account state that was valid at a specific point in time rather than
-returning only the current version.
+```sql
+UPDATE silver_customer
+SET
+    email = NULL,
+    phone = NULL,
+    tax_id = NULL,
+    ...
+WHERE customer_id = 123;
+```
 
-The query accepts an `as_of_date` and returns the applicable version of each
-account for that date.
+**Lifecycle decision, stated explicitly:** this is *anonymization
+in place*, not *deletion* or *archival-then-purge*. The trade-off is
+recorded in `erasure_log` itself — an auditor can prove a specific
+request was actioned, without the platform losing the ability to
+answer "how many accounts existed on date X."
+
+
+
+---
+
+## 7.9 Operational Auditability
+
+**Theory:** auditability is the ability to answer, after the fact,
+*what happened, when, to whom, and who did it* — without relying on
+memory or ad hoc investigation. This platform separates three distinct
+evidence trails, each answering a different auditability question, so
+that none of them get diluted into the others.
+
+| | `_dq_errors` | DQ audit trail (`governance.dq_audit_log`) | Operational log |
+|---|---|---|---|
+| **Question answered** | Was this specific value trustworthy? | Did this check pass, batch-over-batch? | What did the process do, in what order? |
+| **Where** | column on every bronze table | Snowflake table | stdout / optional file |
+| **Grain** | per row, per column | per batch, per check | per process run |
+| **Lifetime** | permanent, lives with the row | permanent, queryable | transient, run-scoped |
+| **Acted on by** | silver (fix/flag/reject) | auditor/reviewer | developer |
+| **Written by** | `_safe_cast()` / `_pack_dq_errors()` | `log_dq_event()` | `log.info`/`log.warning` (stdlib `logging`) |
+
+Full mechanics of `_dq_errors` and DQ-as-Control checks are documented
+in `06_data_quality.md`; this section covers the **access-auditing**
+half of operational auditability specifically.
+
+### Restricted-PII access auditing
+
+Snowflake `ACCESS_HISTORY` is queried to audit access to every
+`restricted_pii` column — e.g. for `silver_hr`: `first_name`,
+`last_name`, `middle_initial`, `phone`. The audit query (scoped to the
+last 30 days, in `sql/restricted_pii_access_history.sql`) returns time,
+user, query ID, and SQL text for any query that touched at least one of
+these columns — answering directly: **who accessed restricted PII, when,
+and with what query.**
+
+### Point-in-time reconstruction
+
+`silver_account` (and `silver_customer`) are SCD2-modeled with
+`valid_from_date`/`valid_to_date`, which makes "what did this account
+look like on a given date" a direct, auditable query rather than a
+reconstruction exercise:
 
 ```sql
 SET as_of_date = '2011-06-30';
@@ -261,10 +450,7 @@ SELECT
     _source_table
 FROM brokerage_dwh.silver.silver_account
 WHERE valid_from_date <= $as_of_date
-  AND (
-      valid_to_date >= $as_of_date
-      OR valid_to_date IS NULL
-  )
+  AND (valid_to_date >= $as_of_date OR valid_to_date IS NULL)
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY account_id
     ORDER BY valid_from_date DESC
@@ -272,136 +458,65 @@ QUALIFY ROW_NUMBER() OVER (
 ORDER BY account_id;
 ```
 
-## DQ-as-Control on Ingestion
-Scope: bronze-layer ingestion (`main.py`).
+### DQ-as-Control on ingestion
 
-### `governance.dq_audit_log` (Snowflake table)
+`governance.dq_audit_log` is a structured, permanent DQ evidence table
+— it replaces `print()`-only reconciliation warnings. `log_dq_event()`
+(in `main.py`) inserts one row per check result in its own transaction:
+commit on success, rollback and raise on failure, since a broken
+audit-log insert must never silently disappear.
 
-Structured, queryable DQ evidence trail. Replaces `print()`-only reconciliation
-warnings. Permanent record — not overwritten, not rotated.
-
-### `log_dq_event()` (`main.py`)
-
-Inserts one row per DQ check result. Own transaction: commits on success,
-rolls back and raises `RuntimeError` on failure — a broken audit-log insert
-must not silently disappear.
-
-
-  ```python
-  def log_dq_event(conn, batch_id, check_type, source_file,
-                    expected_value, actual_value, severity, message):
-      ...
-  ```
-
-## Retention & Erasure  
-
-### Erasure requests
-Built `erasure_log` table to track erasure requests and actions. This is a permanent record of what was erased, when, and by whom. The table includes the following columns:
-
-- `erasure_id`: Unique identifier for each erasure request.
-- `customer_id`: Identifier for the customer whose data is being erased.
-- `requested_at`: Timestamp when the erasure request was made.
-- `erased_at`: Timestamp when the data was actually erased.
-- `reason`: Reason for the erasure request.
-- `status`: Current status of the erasure request.
-- `affected_layers`: Layers of the data that are affected by the erasure.
-- `requested_by`: Person or system that requested the erasure.
-- `notes`: Additional notes about the erasure request.
-
-When an erasure request is processed:
-the system will make the PII columns `NULL` in the affected layers and log the action in the `erasure_log` table. We will not delete the rows themselves because this would break referential integrity and historical reconstruction. Instead, we will nullify the PII columns and log the action in the `erasure_log` table.
-
-**Code Example**: we will do that in each layer with a query like the following:
-```sql
-UPDATE silver_customer
-SET
-    email = NULL,
-    phone = NULL,
-    tax_id = NULL,
-    ...
-WHERE customer_id = 123;
-```
-
-### Retention Policy
-Raw PII is retained for 90 days to support recovery, debugging, and controlled reprocessing.
-This limits unnecessary long-term exposure while providing a reasonable operational recovery window.
-
-**Code Example**:
-```sql
-ALTER TABLE bronze_customer
-SET DATA_RETENTION_TIME_IN_DAYS = 90;
-```
-### Reconciliation check — full audit artifact
-
-Existing reconciliation query (audit file `RowCount` vs actual bronze rows
-loaded) now logs **every** outcome, not just failures:
+Reconciliation (audit file `RowCount` vs. actual bronze rows loaded)
+logs **every** outcome, not only mismatches — this is deliberate:
+logging passes too means the table proves reconciliation *coverage*
+per batch, not just failures.
 
 | Outcome | `check_type` | `severity` |
 |---|---|---|
-| counts match | `reconciliation_check` | `PASS` |
-| counts differ | `reconciliation_mismatch` | `WARNING` |
-| audit expects a source, none was loaded | `reconciliation_mismatch` | `WARNING` |
+| Counts match | `reconciliation_check` | `PASS` |
+| Counts differ | `reconciliation_mismatch` | `WARNING` |
+| Audit expects a source, none was loaded | `reconciliation_mismatch` | `WARNING` |
 
-Decision: logging passes too (not only exceptions) means the table shows
-reconciliation *coverage* per batch — an auditor can confirm the check ran
-for every source, not just see the failures. Mismatches remain non-fatal:
-a mismatch may have a legitimate explanation, so someone reviews it rather
-than the batch aborting automatically.
+Mismatches stay non-fatal — a mismatch can have a legitimate
+explanation, so it's surfaced for human review rather than aborting the
+batch automatically.
 
 ### Operational logging (`logging_setup.py`)
 
-Separate from the DQ audit trail — this is process/progress output, not
-business evidence. Not written to Snowflake.
+Separate again from the two evidence tables above — this is
+process/progress output, not business evidence, and is **not** written
+to Snowflake. Console handler always on; file handler added when
+`--log-file` is passed. `LoggerAdapter` injects `batch_id` into every
+record automatically.
 
-```python
-def get_logger(batch_id: int, log_file: str | None = None) -> logging.LoggerAdapter:
-    ...
-```
 
-- Console handler always on; file handler added when `--log-file` is passed.
-- `LoggerAdapter` injects `batch_id` into every record automatically.
-- All `main.py` `print()` calls replaced with `log.info(...)` / `log.warning(...)`.
-- `force_delete_batch()` and `run_batch()` now take a `log` parameter.
 
-### `_dq_errors` — row/column-level cast errors (Problem 3 in `06_data_quality`, pre-existing)
- 
-Separate again from the two logs above — this is per-row evidence, not
-process output and not a batch-level audit table.
-We talked about it in `06_data_quality.md`.
- 
-### Where each piece of evidence lives
- 
-| | `_dq_errors` | DQ audit trail | Operational log |
+---
+
+## 7.10 Regulatory Compliance Mapping
+
+**Theory:** compliance mapping ties abstract regulatory obligations to
+concrete tables/columns/controls in the actual model — a regulation
+that isn't mapped to a specific object is not actually enforced, just
+referenced.
+
+| Regime | In scope? | Mapped objects | Control need |
 |---|---|---|---|
-| Where | column on every bronze table | `governance.dq_audit_log` (Snowflake) | stdout / optional file |
-| Grain | per row, per column | per batch, per check | per process run |
-| What | failed casts (raw value, error type/msg) | check results (pass/fail, expected/actual) | progress, errors, debug |
-| Lifetime | permanent, lives with the row | permanent, queryable | transient, run-scoped |
-| Who acts on it | silver (fix/flag/reject) | auditor/reviewer | developer |
-| Written by | `_safe_cast()` / `_pack_dq_errors()` | `log_dq_event()` | `log.info` / `log.warning` (stdlib `logging`) |
- 
-Keeping these three apart avoids forcing operational noise (row counts,
-"batch complete") into a schema meant for check evidence, avoids losing
-DQ evidence in a log stream nobody archives, and keeps row-level cast
-errors traveling with the row itself rather than off in a separate table
-that would need a join to reconstruct which row was dirty.
- 
-## Regulatory Mapping
-- **SOX-style**: apply to trade/balance data — `fact_trade`, `fact_trade_history`, `silver_trade`. Control need: integrity + audit trail + no double-count risk on financial measure (commission, balance). ADR-002/ADR-009 split (silver+gold) exist for this exact reason — one row latest state, one row full status lineage — stop fan-trap where `SUM(commission)` multiply by transition count. `_row_hash`, `_batch_id`, `_cdc_dsn` ordering give traceable lineage: auditor can reconstruct "what value, when, from what source event." SOX-style control here = financial reporting accuracy + immutable audit trail, not raw storage security.
+| **SOX-style** (financial reporting integrity) | Yes | `fact_trade`, `fact_trade_history`, `silver_trade` | Integrity + audit trail + no double-count risk on financial measures (commission, balance). The ADR-002/ADR-009 split (silver + gold: one row latest-state, one row full status-lineage) exists specifically to stop the fan-trap where `SUM(commission)` multiplies by transition count. `_row_hash`/`_batch_id`/`_cdc_dsn` ordering gives a traceable lineage — an auditor can reconstruct "what value, when, from what source event." SOX-style control here means financial reporting accuracy and an immutable audit trail, not raw storage security. |
+| **GDPR-style** (personal data protection) | Yes | `silver_customer` / `dim_customer` | Holds name, address, email, DOB, tax ID, phone. SCD2 (day-grain, tracked columns include name/address/email) keeps history forever by design — a direct, accepted tension against the erasure right and data-minimization principle. Carried-only fields (phone, DOB, tax ID) are still personal data even though not versioned for change-tracking — still in scope. Control need: retention policy + deletion/anonymization procedure over SCD2 history ([7.8](#78-data-retention-and-lifecycle-policies)), access control on PII columns ([7.6](#76-access-control-paradigms)/[7.7](#77-pii-masking--privacy-controls)), and a documented lawful basis for retaining full history (business need: identity/location/status audit, per spec). |
+| **PCI-DSS** (cardholder data) | **No** | — | No PAN, card number, CVV, or expiry field anywhere in the source dictionary or model. `CashTransaction`/`fact_cashtransaction` carry amount + type only, never a payment instrument. The pipeline never receives cardholder data end-to-end, so PCI-DSS scope is zero — the correct scoping answer is "the data never enters the system," not "we handle it carefully." |
 
-- **GDPR-style**: apply to customer PII — `silver_customer`/`dim_customer`. Holds name, address, email, DOB, tax_id, phone. SCD2 (ADR-001, day-grain, tracked columns include name/address/email) mean history kept forever by design — direct tension vs GDPR erasure right + data minimization. Carried-only fields (phone, DOB, tax_id) still land in table even though not "tracked" for versioning — still personal data, still in scope. Control need: retention policy + deletion/anonymization procedure on SCD2 history, access control on PII columns, and lawful-basis documentation for why full history kept (business need: identity/location/status audit — spec says so).
+---
 
-- **PCI-DSS**: not apply. No PAN, card number, CVV, expiry field anywhere in dictionary or model — `CashTransaction`/`fact_cashtransaction` carry amount + type only, no payment-instrument detail. Whole pipeline (bronze→silver→gold) never receive cardholder data, so PCI-DSS scope = zero. Correct answer for "why not" question — not "we're careless," but "data never enters system," which is the actual PCI scoping question interviewers check.
+## 7.11 Data Exposures & Downstream Consumers
 
-## Exposures
-
-
-`exposures.yml` declares downstream consumers of the gold layer so dbt can
-show them in the DAG/docs site and `dbt build --select +exposure:*` can
-validate that every model an exposure depends on still exists and builds
-clean. An exposure only makes sense once real gold models exist to point
-at — that's why this is added now, after the star schema, not earlier.
-
+`exposures.yml` declares downstream consumers of the gold layer so dbt
+can render them in the DAG/docs site, and `dbt build --select
++exposure:*` can validate that every model an exposure depends on still
+exists and builds clean. Exposures extend lineage
+([7.4](#74-data-lineage)) past the warehouse boundary — governance
+doesn't stop at "who can query the table," it also tracks "what actually
+consumes this table downstream."
 
 | Exposure | Type | Status | Depends on |
 |---|---|---|---|
@@ -409,5 +524,28 @@ at — that's why this is added now, after the star schema, not earlier.
 | `ml_trade_behavior_model` | `ml` | Placeholder | `fact_trade`, `fact_holding`, `fact_market_history`, `dim_customer`, `dim_security` |
 | `reverse_etl_crm_sync` | `application` | Placeholder | `dim_customer`, `dim_account`, `dim_prospect` |
 
-> `ml_trade_behavior_model` and `reverse_etl_crm_sync` are not real integrations. Nothing downstream actually consumes those models today. They were added deliberately, as an **exercise**.
+`ml_trade_behavior_model` and `reverse_etl_crm_sync` are declared as an
+exercise — nothing downstream actually consumes those models today.
+An exposure only makes sense once real gold models exist to point at,
+which is why this section comes after the star schema, not before it.
 
+---
+
+## Open items
+
+Tracked honestly rather than presented as done — the practice a senior
+reviewer looks for:
+
+1. **Row-level access control** not implemented ([7.6](#76-access-control-paradigms))
+   — no current requirement, but flagged for a future multi-tenant or
+   multi-region scope.
+2. **Prospect-to-customer matching rule** unconfirmed (TPC-DI spec
+   Clause 4.5.x) — blocks populating `dim_prospect.customer_sk`
+   (see `05_gold.md` ADR-004).
+3. **Reconciliation thresholds** (`06_data_quality.md` §6.3)
+   are working defaults, not confirmed business SLAs — revisit once
+   real batch volumes are known.
+4. **Active data catalog** (Collibra/Alation/Atlan/DataHub-class tool)
+   not adopted — current dbt-native catalog ([7.5](#75-metadata-management-and-data-catalogs))
+   is sufficient at this scale; revisit if cross-platform discovery or
+   business-user self-service search becomes a requirement.

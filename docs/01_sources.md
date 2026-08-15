@@ -1,98 +1,86 @@
-# Source Data Dictionary
+# 1. Source Data Dictionary
 
+**Scope:** the 21 TPC-DI source files this platform ingests, plus 2
+operational control feeds. This is the system-of-record definition for
+"what does the vendor actually send us" — every downstream decision in
+`02_bronze_design.md` through `07_governance.md` traces back to a row in
+this document. Get this wrong and every later layer inherits the error;
+this is why it's document §1, not an appendix.
 
-
-This information comes directly from the official [TPC-DI](https://www.google.com/search?q=https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-di_v1.1.0.pdf) benchmark document (version 1.1.0, sections 2.2.2.x).
-
-The structure details are taken from an actual real data sample instead of the official text.
+This is taken from the official [TPC-DI benchmark specification](https://www.tpc.org/tpc_documents_current_versions/pdf/tpc-di_v1.1.0.pdf)
+(v1.1.0, §2.2.2.x), but the field-level structure below is verified
+against real sample data, not just the spec prose — several corrections
+below exist because the spec text and the actual file disagreed.
 
 > [!NOTE]
-> Although the source tags some tables as CDC, a closer look shows they actually function as not CDC and we called them "**quasi-CDC**" in our bronze design due to two main reasons:
-> 1. The CDC flag is always 'I' (Insert) and never 'U' (Update).
-> 
-> 
-> 2. The table is append-only (new events are only added as new rows, and existing rows are never changed).
+> **Terminology — "quasi-CDC."** The spec tags `HoldingHistory`,
+> `WatchHistory`, `DailyMarket`, and `CashTransaction` as CDC sources.
+> A closer look shows they don't actually function as CDC in the
+> classical sense (insert **and** update event stream): the `CDC_FLAG`
+> is always `'I'`, never `'U'`, and rows are never revised once written
+> — it's an **insert-only event log** wearing CDC-shaped column names.
+> This platform calls that pattern **quasi-CDC** throughout, to keep it
+> distinct from the two sources that carry genuine update semantics
+> (`Account.txt`, `Customer.txt`, `Trade.txt`). The distinction drives a
+> real modeling decision downstream — see `04_silver.md` §4, "Two dedup
+> shapes, one macro."
 
+## Table of contents
+- [1.1 Batch Scope Matrix](#11-batch-scope-matrix)
+- [1.2 Source Definitions](#12-source-definitions)
+- [1.3 Control & Audit Feeds](#13-control--audit-feeds)
 
+---
 
-## Table of Contents
+## 1.1 Batch Scope Matrix
 
-- [Source Data Dictionary](#source-data-dictionary)
-  - [Table of Contents](#table-of-contents)
-  - [Batch Scope Matrix](#batch-scope-matrix)
-  - [1. CustomerMgmt.xml](#1-customermgmtxml)
-  - [2. Account.txt](#2-accounttxt)
-  - [3. Customer.txt](#3-customertxt)
-  - [4. HR.csv](#4-hrcsv)
-  - [5. Prospect.csv](#5-prospectcsv)
-  - [6. FINWIRE](#6-finwire)
-    - [CMP records (company)](#cmp-records-company)
-    - [SEC records (security)](#sec-records-security)
-    - [FIN records (quarterly financials)](#fin-records-quarterly-financials)
-  - [7. Trade.txt](#7-tradetxt)
-    - [A. Historical Load (Batch1) — 14 fields, no CDC](#a-historical-load-batch1--14-fields-no-cdc)
-    - [B. Incremental (Batch2/3) — 16 fields, with CDC](#b-incremental-batch23--16-fields-with-cdc)
-  - [8. TradeHistory.txt](#8-tradehistorytxt)
-  - [9. HoldingHistory.txt](#9-holdinghistorytxt)
-  - [10. Industry.txt](#10-industrytxt)
-  - [11. StatusType.txt](#11-statustypetxt)
-  - [12. TaxRate.txt](#12-taxratetxt)
-  - [13. Time.txt](#13-timetxt)
-  - [14. TradeType.txt](#14-tradetypetxt)
-  - [15. WatchHistory.txt](#15-watchhistorytxt)
-  - [16. DailyMarket.txt](#16-dailymarkettxt)
-  - [17. CashTransaction.txt](#17-cashtransactiontxt)
-  - [18. Date.txt](#18-datetxt)
-  - [19. BatchDate.txt](#19-batchdatetxt)
-  - [20. Audit files (`*_audit.csv`)](#20-audit-files-_auditcsv)
-
-![Source Data](./images/sources.png)
-
-## Batch Scope Matrix
+**Theory:** before modeling a single column, a senior engineer's first
+question is "what's the temporal shape of this feed" — one-time load,
+full re-extract, or true incremental delta. That answer, not the file
+format, is what determines the correct load strategy (`02_bronze_design.md`
+§2 defines five archetypes directly from this matrix).
 
 | File | Batch1 (Historical) | Batch2/3 (Incremental) | CDC fields present? |
-| --- | --- | --- | --- |
-| CustomerMgmt.xml | ✅ | ❌ (replaced by flat files (Account.txt, Customer.txt)) | N/A (XML ActionType instead) |
-| Account.txt | ❌ | ✅ | Yes - **real-CDC** |
-| Customer.txt | ❌ | ✅ | Yes - **real-CDC** |
-| HR.csv | ✅ | ❌ | No |
-| Prospect.csv | ✅ | ✅ (full re-extract each batch) | No |
-| FINWIRE (quarterly) | ✅ | ❌ | No |
-| Trade.txt | ✅ | ✅ | Yes - **real-CDC** |
-| TradeHistory.txt | ✅ | ❌ (Historical Load only, per spec) | No |
-| HoldingHistory.txt | ✅ | ✅ | No in Batch1, Yes in Batch2/3 - **quasi-CDC** |
-| CashTransaction.txt | ✅ | ✅ | No in Batch1, Yes in Batch2/3 - **quasi-CDC** |
-| WatchHistory.txt | ✅ | ✅ | No in Batch1, Yes in Batch2/3 - **quasi-CDC** |
-| DailyMarket.txt | ✅ | ✅ | No in Batch1, Yes in Batch2/3 - **quasi-CDC** |
-| Date.txt / Time.txt / StatusType.txt / TaxRate.txt / Industry.txt / TradeType.txt | ✅ | ❌ | No |
-| BatchDate.txt | ✅ | ✅ | N/A (control file) |
+|---|---|---|---|
+| `CustomerMgmt.xml` | ✅ | ❌ (replaced by `Account.txt`/`Customer.txt`) | N/A — `ActionType` instead |
+| `Account.txt` | ❌ | ✅ | **Real CDC** |
+| `Customer.txt` | ❌ | ✅ | **Real CDC** |
+| `HR.csv` | ✅ | ❌ | No |
+| `Prospect.csv` | ✅ | ✅ (full re-extract each batch, not incremental) | No |
+| `FINWIRE` (quarterly) | ✅ | ❌ | No |
+| `Trade.txt` | ✅ | ✅ | **Real CDC** |
+| `TradeHistory.txt` | ✅ | ❌ (Historical Load only, per spec) | No |
+| `HoldingHistory.txt` | ✅ | ✅ | No in Batch1, yes in Batch2/3 — **quasi-CDC** |
+| `CashTransaction.txt` | ✅ | ✅ | No in Batch1, yes in Batch2/3 — **quasi-CDC** |
+| `WatchHistory.txt` | ✅ | ✅ | No in Batch1, yes in Batch2/3 — **quasi-CDC** |
+| `DailyMarket.txt` | ✅ | ✅ | No in Batch1, yes in Batch2/3 — **quasi-CDC** |
+| `Date.txt` / `Time.txt` / `StatusType.txt` / `TaxRate.txt` / `Industry.txt` / `TradeType.txt` | ✅ | ❌ | No |
+| `BatchDate.txt` | ✅ | ✅ | N/A — control file |
 | `*_audit.csv` | ✅ | ✅ | N/A |
 
-**The pattern to internalize:** several files (Trade, HoldingHistory,
-WatchHistory, DailyMarket) are **not single fixed schemas** — they have
-fewer columns in Batch1 than in Batch2/3, because the spec states plainly
-for each of them: *"The CDC_FLAG and CDC_DSN fields are not present in the
-data set used by the Historical Load.
+**The pattern to internalize:** several files (`Trade`, `HoldingHistory`,
+`WatchHistory`, `DailyMarket`) do not have a **single fixed schema** —
+column count differs between Batch1 and Batch2/3, because the spec
+states plainly that CDC fields "are not present in the data set used by
+the Historical Load." This is the single fact that forces the
+schema-shift handling documented in `02_bronze_design.md` (Archetype B)
+and `03_ingestion.md` §3 (`_split_cdc()`).
 
-## 1. CustomerMgmt.xml
 
+---
 
+## 1.2 Source Definitions
 
-**Format:** Nested XML 
+### 1.2.1 `CustomerMgmt.xml`
 
-**Scope:** Batch1 (Historical) only
+**Format:** nested XML · **Scope:** Batch1 (Historical) only
 
-**Structure**, per the actual XSD in the spec:
-
-An `Action` element wraps each event, with attributes `ActionType` and
-`ActionTS` (dateTime). Inside, a `Customer` element carries attributes
-`C_ID` (required), `C_TAX_ID`, `C_GNDR`, `C_TIER`, `C_DOB`, and contains:
-
-* A `TaxInfo` block (optional): `C_LCL_TX_ID`, `C_NAT_TX_ID`
-* Zero or more `Account` elements, each with attribute `CA_ID` (required)
-and `CA_TAX_ST`, plus child elements `CA_B_ID` and `CA_NAME`
-
-**Row example** (constructed to match the actual XSD structure shown):
+An `Action` element wraps each event (`ActionType`, `ActionTS`). Inside,
+a `Customer` element carries `C_ID` (required), `C_TAX_ID`, `C_GNDR`,
+`C_TIER`, `C_DOB`, and contains:
+- an optional `TaxInfo` block (`C_LCL_TX_ID`, `C_NAT_TX_ID`)
+- zero or more `Account` elements (`CA_ID` required, `CA_TAX_ST`, plus
+  `CA_B_ID`/`CA_NAME`)
 
 ```xml
 <Action ActionType="NEW" ActionTS="2015-03-03T08:47:33">
@@ -107,540 +95,293 @@ and `CA_TAX_ST`, plus child elements `CA_B_ID` and `CA_NAME`
     </Account>
   </Customer>
 </Action>
-
 ```
 
-## 2. Account.txt
+→ Parsed by `xml_loader.py` (`03_ingestion.md` §3.3). Structural
+outlier — see Archetype D, `02_bronze_design.md` §2.
 
+### 1.2.2 `Account.txt`
 
+**Format:** pipe-delimited · **Scope:** Batch2/3 (Incremental) only
 
-**Format:** Pipe-delimited
+| Column | Description |
+|---|---|
+| `CDC_FLAG` | `I` / `U` |
+| `CDC_DSN` | Sequence number |
+| `CA_ID` | Account ID |
+| `CA_B_ID` | Managing broker ID |
+| `CA_C_ID` | Owning customer ID |
+| `CA_NAME` | Account name |
+| `CA_TAX_ST` | Tax status code |
+| `CA_ST_ID` | Status code |
 
-**Scope:** Batch2/Batch3 (Incremental) only
+**Row example:** `I|8214563|20469|1284|10284|WSrAJPnvZzbENxGPc...|0|ACTV`
 
-| Column | Description | Nullability |
-| --- | --- | --- |
-| CDC_FLAG | `I` / `U` |  |
-| CDC_DSN | Sequence number |  |
-| CA_ID | Account ID |  |
-| CA_B_ID | Managing broker ID |  |
-| CA_C_ID | Owning customer ID |  |
-| CA_NAME | Account name |  |
-| CA_TAX_ST | Tax status code |  |
-| CA_ST_ID | Status code |  |
+### 1.2.3 `Customer.txt`
 
-**Row example:**
+**Format:** pipe-delimited · **Scope:** Batch2/3 (Incremental) only
 
-`I|8214563|20469|1284|10284|WSrAJPnvZzbENxGPc...|0|ACTV`
+CDC metadata followed by the complete customer record. Unlike
+`CustomerMgmt.xml`, each phone number is flattened into four separate
+fields (country code, area code, local number, extension) — a deliberate
+naming/shape alignment used later to unify the two sources (see
+`04_silver.md` ADR-001).
 
-## 3. Customer.txt
-
-
-
-**Format:** Pipe-delimited
-
-**Scope:** Batch2/Batch3 (Incremental) only
-
-The incremental Customer extract contains CDC metadata followed by the
-complete customer record. Unlike `CustomerMgmt.xml`, each phone number is
-flattened into four separate fields (country code, area code, local number,
-extension).
-
-| Column | Description | Nullability |
-| --- | --- | --- |
-| CDC_FLAG | CDC operation (`I` = Insert, `U` = Update) |  |
-| CDC_DSN | CDC sequence number |  |
-| C_ID | Customer identifier |  |
-| C_TAX_ID | Government tax identifier |  |
-| C_ST_ID | Customer status code |  |
-| C_L_NAME | Last name |  |
-| C_F_NAME | First name |  |
-| C_M_NAME | Middle name |  |
-| C_GNDR | Gender |  |
-| C_TIER | Customer tier |  |
-| C_DOB | Date of birth |  |
-| C_ADLINE1 | Address line 1 |  |
-| C_ADLINE2 | Address line 2 |  |
-| C_ZIPCODE | Postal code |  |
-| C_CITY | City |  |
-| C_STATE_PROV | State / Province |  |
-| C_CTRY | Country |  |
-| C_CTRY_1 | Phone 1 country code |  |
-| C_AREA_1 | Phone 1 area code |  |
-| C_LOCAL_1 | Phone 1 local number |  |
-| C_EXT_1 | Phone 1 extension |  |
-| C_CTRY_2 | Phone 2 country code |  |
-| C_AREA_2 | Phone 2 area code |  |
-| C_LOCAL_2 | Phone 2 local number |  |
-| C_EXT_2 | Phone 2 extension |  |
-| C_CTRY_3 | Phone 3 country code |  |
-| C_AREA_3 | Phone 3 area code |  |
-| C_LOCAL_3 | Phone 3 local number |  |
-| C_EXT_3 | Phone 3 extension |  |
-| C_PRIM_EMAIL | Primary email address |  |
-| C_ALT_EMAIL | Alternate email address |  |
-| C_LCL_TX_ID | Local tax jurisdiction |  |
-| C_NAT_TX_ID | National tax jurisdiction |  |
+| Column | Description |
+|---|---|
+| `CDC_FLAG` | `I` / `U` |
+| `CDC_DSN` | Sequence number |
+| `C_ID` | Customer identifier |
+| `C_TAX_ID` | Government tax identifier |
+| `C_ST_ID` | Customer status code |
+| `C_L_NAME` / `C_F_NAME` / `C_M_NAME` | Last / first / middle name |
+| `C_GNDR` | Gender |
+| `C_TIER` | Customer tier |
+| `C_DOB` | Date of birth |
+| `C_ADLINE1` / `C_ADLINE2` | Address lines |
+| `C_ZIPCODE` / `C_CITY` / `C_STATE_PROV` / `C_CTRY` | Address components |
+| `C_CTRY_n` / `C_AREA_n` / `C_LOCAL_n` / `C_EXT_n` (n=1..3) | Three flattened phone numbers |
+| `C_PRIM_EMAIL` / `C_ALT_EMAIL` | Email addresses |
+| `C_LCL_TX_ID` / `C_NAT_TX_ID` | Tax jurisdiction codes |
 
 **Row example (verified Batch3 sample):**
-
 ```text
 I|6455|4739|016-32-5107|ACTV|Moncur|Vittorio||M|3|1983-06-21|19452 Bryant Irvin West||H2E 1V8|Paterson|TX|United States of America|||821-2946||||205-8612|06614|1|968|027-5679||Vittorio.Moncur@farce.de||MD4|MT5
-
 ```
 
-## 4. HR.csv
+### 1.2.4 `HR.csv`
 
+**Format:** comma-delimited · **Scope:** Batch1 only, ordered by `EmployeeID`
 
+| Column | Type | Nullability |
+|---|---|---|
+| `EmployeeID` | IDENT_T | not null |
+| `ManagerID` | IDENT_T | not null |
+| `EmployeeFirstName` / `EmployeeLastName` | CHAR(30) | not null |
+| `EmployeeMI` | CHAR(1) | |
+| `EmployeeJobCode` | NUM(3) | |
+| `EmployeeBranch` | CHAR(30) | |
+| `EmployeeOffice` | CHAR(10) | |
+| `EmployeePhone` | CHAR(14) | |
 
-**Format:** Comma-delimited
+**Row example:** `140501,140102,John,Smith,R,314,Chicago Branch,7B,(312) 555-0142`
 
-**Scope:** Batch1 (Historical) only, ordered by EmployeeID
+### 1.2.5 `Prospect.csv`
 
-| Column | Type | Description | Nullability |
-| --- | --- | --- | --- |
-| EmployeeID | IDENT_T | ID of employee (Not NULL) | not null |
-| ManagerID | IDENT_T | ID of employee's manager (Not NULL) | not null |
-| EmployeeFirstName | CHAR(30) | First name (Not NULL) | not null |
-| EmployeeLastName | CHAR(30) | Last name (Not NULL) | not null |
-| EmployeeMI | CHAR(1) | Middle initial |  |
-| EmployeeJobCode | NUM(3) | Numeric job code |  |
-| EmployeeBranch | CHAR(30) | Facility/branch |  |
-| EmployeeOffice | CHAR(10) | Office number/description |  |
-| EmployeePhone | CHAR(14) | Phone number |  |
+**Format:** comma-delimited · **Scope:** Batch1 & Batch2/3 — **full
+re-extract every batch, no CDC**
 
-**Row example**:
+| Column | Type | Restriction |
+|---|---|---|
+| `AgencyID` | CHAR(30) | not null — unique agency identifier |
+| `LastName` / `FirstName` | CHAR(30) | not null |
+| `MiddleInitial` | CHAR(1) | |
+| `Gender` | CHAR(1) | `M`/`F`/`U` |
+| `AddressLine1` / `AddressLine2` / `PostalCode` | CHAR | |
+| `City` / `State` | CHAR | not null |
+| `Country` / `Phone` | CHAR | |
+| `Income` | NUM(9) | annual income |
+| `NumberCars` / `NumberChildren` | NUM(2) | |
+| `MaritalStatus` | CHAR(1) | `S`/`M`/`D`/`W`/`U` |
+| `Age` | NUM(3) | |
+| `CreditRating` | NUM(4) | |
+| `OwnOrRentFlag` | CHAR(1) | `O`/`R`/`U` — **corrected from spec's "OwnHome"** |
+| `Employer` | CHAR(30) | |
+| `NumberCreditCards` | NUM(2) | **corrected from spec's "CreditCard"** |
+| `NetWorth` | NUM(12) | |
 
-`140501,140102,John,Smith,R,314,Chicago Branch,7B,(312) 555-0142`
+**Row example:** `PEL0,PELLAND,Netti,,F,21847 Olympia Street,,T6B 1I1,Fairbanks,MA,United States of America,1-712-522-6088,368776,,3,W,20,760,O,Brink's,,1058868`
 
-## 5. Prospect.csv
+**Load implication:** no reliable key uniqueness within a single batch —
+Archetype C (snapshot dimension) in `02_bronze_design.md` §2.
 
+### 1.2.6 `FINWIRE`
 
+**Format:** fixed-width, 3 interleaved record types (`CMP`/`SEC`/`FIN`)
+· **Scope:** Batch1 only, quarterly
 
-**Format:** Comma-delimited
+Every line starts with `PTS` (15-char timestamp) and a 3-char `RecType`
+that dispatches the rest of the line's parsing (`03_ingestion.md`
+§3.2). One field, `CoNameOrCIK`, is polymorphic — numeric-only means CIK,
+anything else means company name — resolved at parse time into two
+separate columns. Structural outlier — Archetype D.
 
-**Scope:** Batch1 & Batch2/3 (full re-extract every batch — no CDC)
+**CMP (company), SEC (security), FIN (quarterly financials)** — field
+lists per the TPC-DI spec's fixed-width layout; see the spec §2.2.2.6
+for the authoritative column-offset table.
 
-| Column | Type | Restriction | Description | Nullability |
-| --- | --- | --- | --- | --- |
-| AgencyID | CHAR(30) | Not NULL | Unique agency identifier | not null |
-| LastName | CHAR(30) | Not NULL | Last name | not null |
-| FirstName | CHAR(30) | Not NULL | First name | not null |
-| MiddleInitial | CHAR(1) |  | Middle initial |  |
-| Gender | CHAR(1) | M/F/U |  |  |
-| AddressLine1 | CHAR(80) |  |  |  |
-| AddressLine2 | CHAR(80) |  |  |  |
-| PostalCode | CHAR(12) |  |  |  |
-| City | CHAR(25) | Not NULL |  | not null |
-| State | CHAR(20) | Not NULL |  | not null |
-| Country | CHAR(24) |  |  |  |
-| Phone | CHAR(30) |  |  |  |
-| Income | NUM(9) |  | Annual income |  |
-| NumberCars | NUM(2) |  |  |  |
-| NumberChildren | NUM(2) |  |  |  |
-| MaritalStatus | CHAR(1) | S/M/D/W/U |  |  |
-| Age | NUM(3) |  |  |  |
-| CreditRating | NUM(4) |  |  |  |
-| OwnOrRentFlag | CHAR(1) | O/R/U | **corrected from "OwnHome"** |  |
-| Employer | CHAR(30) |  |  |  |
-| NumberCreditCards | NUM(2) |  | **corrected from "CreditCard"** |  |
-| NetWorth | NUM(12) |  |  |  |
+**CMP Example:**\
+`19670914-023913CMPNkpmsBILljFbVIAskKSudkLAIHYbeCnBzSVbIcIypZcePYIXqxdlNs      0000000095ACTVSBCCC-1921040222767 Misty Street                                                                                                                                              45206       Torrance                 OK                  United States of AmericaPhilipson                                     lVJASHoMGelpWJMEbCiWJBVKeSdhXXDEhWORWuTAVfHQOoCPCtDdxBGCqPJHNER ITQIpMMraDKEKsFUFDJPEHcOTSbHKrkhkCnVwBDASypJbj`
 
-**Row example:**
+**SEC Example:**\
+`19670926-205039SECAAAAAAAAAAAAAHLPREF_AACTVeDuNDDBObVQJcXSJiVMfkO                                                NASDAQ141200231    1955022218501023        2.320000000081`
 
-`PEL0,PELLAND,Netti,,F,21847 Olympia Street,,T6B 1I1,Fairbanks,MA,United States of America,1-712-522-6088,368776,,3,W,20,760,O,Brink's,,1058868`
+**FIN Example:**\
+`19670705-152952FIN196731967070119670705     333091604.98     206200734.95        1.08        1.07        0.62     883806847.78  233589694804.18    4834168239.85    191000965    1932707650000000047`
+### 1.2.7 `Trade.txt`
 
-## 6. FINWIRE
+**Format:** pipe-delimited · **Scope:** Batch1 & Batch2/3 — **schema
+differs between them**
 
+- **Batch1 (Historical Load)** — 14 fields, no CDC columns.
+- **Batch2/3 (Incremental)** — 16 fields, `CDC_FLAG`/`CDC_DSN` prepended.
 
+This is the canonical example of the schema-shift pattern flagged in
+§1.1 — see `02_bronze_design.md` Archetype B for the bronze-side
+handling and `03_ingestion.md` §3.1 for the parsing logic.
 
-**Format:** Fixed-width, no delimiters, quarterly files (`FINWIRE2015Q4`, etc.)
+### 1.2.8 `TradeHistory.txt`
 
-**Scope:** Batch1 only. All 3 record types share a 15-char PTS + 3-char
-RecType prefix at the start of every record.
+**Format:** pipe-delimited · **Scope:** Batch1 (Historical Load) only,
+per spec — no Batch2/3 counterpart exists at all
 
-### CMP records (company)
+Trade-lifecycle fact data (linked to `Trade.txt` via `T_ID`), loaded
+once like a static dimension but semantically fact data — Archetype E,
+`02_bronze_design.md` §2.
 
-| Field | Width | Description | Nullability |
-| --- | --- | --- | --- |
-| PTS | 15 | Posting timestamp, `YYYYMMDD-HHMMSS` |  |
-| RecType | 3 | `"CMP"` |  |
-| CompanyName | 60 |  |  |
-| CIK | 10 | SEC identifier |  |
-| Status | 4 | `ACTV` / `INAC` |  |
-| IndustryID | 2 |  |  |
-| SPrating | 4 |  |  |
-| FoundingDate | 8 | `YYYYMMDD` |  |
-| AddrLine1 | 80 |  |  |
-| AddrLine2 | 80 |  |  |
-| PostalCode | 12 |  |  |
-| City | 25 |  |  |
-| StateProvince | 20 |  |  |
-| Country | 24 |  |  |
-| CEOname | 46 |  |  |
-| Description | 150 |  |  |
+> You can see how we worked with `Trade` and `TradeHistory` together in the `04_silver.md` §4.3.2 'ADR-002: Trade' section.
 
-**Row example (FINWIRE2015Q4):**
+### 1.2.9 `HoldingHistory.txt`
 
-`20150930-105809CMPwXNVgHqwrsTCfxfjjbKr                                        0000001055ACTVPRAA- 1868100922506 Shelter Drive                                                                                                                                             98127       Halifax                  Manitoba            United States of AmericaAita                                          PDAzlWXAmHTFclLeP`
+**Format:** pipe-delimited · **Scope:** Batch1 (no CDC) & Batch2/3
+(with CDC) — quasi-CDC
 
-### SEC records (security)
+| Column | Description |
+|---|---|
+| `HH_H_T_ID` | Trade ID that **originally created** this holding row |
+| `HH_T_ID` | Trade ID of the **current** (modifying) trade |
+| `HH_BEFORE_QTY` | Quantity held before this trade |
+| `HH_AFTER_QTY` | Quantity held after this trade |
 
-| Field | Width | Description | Nullability |
-| --- | --- | --- | --- |
-| PTS | 15 |  |  |
-| RecType | 3 | `"SEC"` |  |
-| Symbol | 15 |  |  |
-| IssueType | 6 |  |  |
-| Status | 4 |  |  |
-| Name | 70 |  |  |
-| ExID | 6 | Exchange ID |  |
-| ShOut | 13 | Shares outstanding |  |
-| FirstTradeDate | 8 |  |  |
-| FirstTradeExchg | 8 |  |  |
-| Dividend | 12 |  |  |
-| CoNameOrCIK | 60 or 10 | Company name (if not all-digits) or CIK (if all-digits) |  |
-
-**Row example (FINWIRE2015Q4):**
-
-`20150930-202539SECAAAAAAAAAAAABBECOMMONINACWDIFfR WnDkmezLhGQQbIUoIpgOKOSTF J                                    NASDAQ650294685    1912031519320701        2.820000000173`
-
-### FIN records (quarterly financials)
-
-| Field | Width | Description | Nullability |
-| --- | --- | --- | --- |
-| PTS | 15 |  |  |
-| RecType | 3 | `"FIN"` |  |
-| Year | 4 |  |  |
-| Quarter | 1 | `1`–`4` |  |
-| QtrStartDate | 8 |  |  |
-| PostingDate | 8 |  |  |
-| Revenue | 17 |  |  |
-| Earnings | 17 |  |  |
-| EPS | 12 | Basic EPS |  |
-| DilutedEPS | 12 |  |  |
-| Margin | 12 |  |  |
-| Inventory | 17 |  |  |
-| Assets | 17 |  |  |
-| Liabilities | 17 |  |  |
-| ShOut | 13 |  |  |
-| DilutedShOut | 13 |  |  |
-| CoNameOrCIK | 60 or 10 |  |  |
-
-**Row example (FINWIRE2015Q4):**
-
-`20150920-021927FIN201532015070120150920    1041315574.26     213823992.69        0.97        0.88        0.21     519264147.52  813470188161.17    5875685170.79    221418113    2429933470000000970`
-
-**Note:** all fields are space-padded — text left-justified, numeric
-right-justified; CIK values are zero-padded on the left.
-
-## 7. Trade.txt
-
-
-
-**Format:** Pipe-delimited
-
-**Scope:** Batch1 (Historical, **no CDC fields**) and Batch2/3 (Incremental,
-**with CDC fields**) — these are genuinely different column counts, per
-spec: *"The CDC_FLAG and CDC_DSN fields are not present in the data set
-used by the Historical Load."*
-
-### A. Historical Load (Batch1) — 14 fields, no CDC
-
-| Column | Description | Nullability |
-| --- | --- | --- |
-| T_ID | Trade identifier |  |
-| T_DTS | Trade timestamp |  |
-| T_ST_ID | Status type |  |
-| T_TT_ID | Trade type |  |
-| T_IS_CASH | `0` margin / `1` cash |  |
-| T_S_SYMB | Security symbol |  |
-| T_QTY | Quantity (> 0) |  |
-| T_BID_PRICE | Requested unit price |  |
-| T_CA_ID | Account ID |  |
-| T_EXEC_NAME | Name of person executing the trade |  |
-| T_TRADE_PRICE | Settled price (null unless status = CMPT) |  |
-| T_CHRG | Fee charged |  |
-| T_COMM | Commission |  |
-| T_TAX | Tax due |  |
-
-**Row example (Historical Load):**
-
-`0|2012-07-07 00:02:34|CMPT|TMB|0|AAAAAAAAAAAACQP|2939|9.57|0|3160|10.02|58.95|27.31|1611.19`
-
-### B. Incremental (Batch2/3) — 16 fields, with CDC
-
-Same 14 fields as above, prefixed with `CDC_FLAG` (`I`/`U`) and `CDC_DSN`.
-
-## 8. TradeHistory.txt
-
-
-
-**Format:** Pipe-delimited
-
-**Scope:** Historical Load (Batch1) only
-
-| Column | Description | Nullability |
-| --- | --- | --- |
-| TH_T_ID | Trade ID (corresponds to Trade.txt's T_ID) |  |
-| TH_DTS | Timestamp of this status update |  |
-| TH_ST_ID | Status type at this point in the trade lifecycle |  |
-
-**Row example:**
-
-`0|2012-07-07 00:01:13|SBMT`
-
-## 9. HoldingHistory.txt
-
-
-
-**Format:** Pipe-delimited
-
-**Scope:** Batch1 (Historical, no CDC) and Batch2/3 (Incremental, with CDC)
-— `CDC_FLAG` always `'I'`.
-
-**Correction:** the draft listed `HH_T_ID` before `HH_H_T_ID` — the spec
-order is the opposite:
-
-| Column | Description | Nullability |
-| --- | --- | --- |
-| HH_H_T_ID | Trade ID that **originally created** this holding row |  |
-| HH_T_ID | Trade ID of the **current** (modifying) trade |  |
-| HH_BEFORE_QTY | Quantity held before this trade |  |
-| HH_AFTER_QTY | Quantity held after this trade |  |
-
-**Row example (Historical Load, no CDC):**
-
-`0|0|2939|1110`
+**Row example (Historical Load, no CDC):** `0|0|2939|1110`
 
 Incremental version prepends `CDC_FLAG`/`CDC_DSN` to the same 4 fields.
 
-## 10. Industry.txt
+### 1.2.10 `Industry.txt`
 
+**Format:** pipe-delimited · **Scope:** Batch1 only
 
+| Column | Type | Description |
+|---|---|---|
+| `IN_ID` | CHAR(2) | Industry code |
+| `IN_NAME` | CHAR(50) | Industry description |
+| `IN_SC_ID` | CHAR(2) | Sector identifier |
 
-**Format:** Pipe-delimited
+**Row example:** `AA|Misc. Capital Goods|FNB`
 
-**Scope:** Batch1 only
+### 1.2.11 `StatusType.txt`
 
-| Column | Type | Description | Nullability |
-| --- | --- | --- | --- |
-| IN_ID | CHAR(2) | Industry code |  |
-| IN_NAME | CHAR(50) | Industry description |  |
-| IN_SC_ID | CHAR(2) | Sector identifier |  |
+**Format:** pipe-delimited · **Scope:** Batch1 only
 
-**Row example:**
-`AA|Misc. Capital Goods|FNB`
+`ST_ID` (CHAR(4)) / `ST_NAME` (CHAR(10)). **Row example:** `ACTV|Active`
 
-## 11. StatusType.txt
+### 1.2.12 `TaxRate.txt`
 
+**Format:** pipe-delimited · **Scope:** Batch1 only
 
+`TX_ID` (CHAR(4)) / `TX_NAME` (CHAR(50)) / `TX_RATE` (NUM(6,5)).
+**Row example:** `US1|U.S. Income Tax Bracket|0.05000`
 
-**Format:** Pipe-delimited
+### 1.2.13 `Time.txt`
 
-**Scope:** Batch1 only
+**Format:** pipe-delimited, ordered by `SK_TimeID` · **Scope:** Batch1
+only
 
-| Column | Type | Description | Nullability |
-| --- | --- | --- | --- |
-| ST_ID | CHAR(4) | Status code |  |
-| ST_NAME | CHAR(10) | Status description |  |
+Standard smart-key time dimension source: `SK_TimeID`, `TimeValue`,
+`HourID`/`HourDesc`, `MinuteID`/`MinuteDesc`, `SecondID`/`SecondDesc`,
+`MarketHoursFlag`, `OfficeHoursFlag`.
 
-**Row example:**
-`ACTV|Active`
+**Row example:** `85|01:23:45|1|"01"|23|"23"|45|"45"|0|0`
 
-## 12. TaxRate.txt
+### 1.2.14 `TradeType.txt`
 
+**Format:** pipe-delimited · **Scope:** Batch1 only
 
+**Correction from spec draft:** the draft table showed 2 fields; the
+actual spec defines 4 — `TT_ID`, `TT_NAME`, `TT_IS_SELL`, `TT_IS_MRKT`.
 
-**Format:** Pipe-delimited
+**Row example:** `TMB|Market-Buy|0|1`
 
-**Scope:** Batch1 only
+### 1.2.15 `WatchHistory.txt`
 
-| Column | Type | Description | Nullability |
-| --- | --- | --- | --- |
-| TX_ID | CHAR(4) | Tax rate code |  |
-| TX_NAME | CHAR(50) | Tax rate description |  |
-| TX_RATE | NUM(6,5) | Tax rate |  |
+**Format:** pipe-delimited · **Scope:** Batch1 (no CDC) & Batch2/3
+(with CDC) — quasi-CDC, `CDC_FLAG` always `'I'`
 
-**Row example:**
-`US1|U.S. Income Tax Bracket|0.05000`
+`W_C_ID`, `W_S_SYMB`, `W_DTS`, `W_ACTION` (`ACTV`/`CNCL`).
 
-## 13. Time.txt
+**Row example:** `17|AAAAAAAAAAAAAJR|2012-07-07 00:03:44|ACTV`
 
+### 1.2.16 `DailyMarket.txt`
 
+**Format:** pipe-delimited · **Scope:** Batch1 (no CDC) & Batch2/3
+(with CDC) — quasi-CDC, `CDC_FLAG` always `'I'`
 
-**Format:** Pipe-delimited, ordered by SK_TimeID
+`DM_DATE`, `DM_S_SYMB`, `DM_CLOSE`, `DM_HIGH`, `DM_LOW`, `DM_VOL`.
 
-**Scope:** Batch1 only
+**Row example:** `2015-07-06|AAAAAAAAAAAABOY|242.93|284.42|185.08|111904727`
 
-| Column | Type | Description | Nullability |
-| --- | --- | --- | --- |
-| SK_TimeID | IDENT_T | Surrogate key |  |
-| TimeValue | CHAR(20) | e.g. `"01:23:45"` |  |
-| HourID | NUM(2) | e.g. `01` |  |
-| HourDesc | CHAR(20) | e.g. `"01"` |  |
-| MinuteID | NUM(2) | e.g. `23` |  |
-| MinuteDesc | CHAR(20) | e.g. `"01:23"` |  |
-| SecondID | NUM(2) | e.g. `45` |  |
-| SecondDesc | CHAR(20) | e.g. `"01:23:45"` |  |
-| MarketHoursFlag | BOOLEAN | During market hours? |  |
-| OfficeHoursFlag | BOOLEAN | During office hours? |  |
+### 1.2.17 `CashTransaction.txt`
 
-**Row example:**
-`85|01:23:45|1|"01"|23|"23"|45|"45"|0|0`
+**Format:** pipe-delimited · **Scope:** Batch1 (no CDC) & Batch2/3
+(with CDC) — quasi-CDC, `CDC_FLAG` always `'I'`
 
-## 14. TradeType.txt
+`CDC_FLAG`/`CDC_DSN` (incremental only), `CT_CA_ID`, `CT_DTS`,
+`CT_AMT` (negative = withdrawal), `CT_NAME`.
 
+**Row example (Batch2):** `I|4937695|6507|2017-07-08 10:16:09|5519.45|AYJRCJpzLBMJUWKjS...`
 
+### 1.2.18 `Date.txt`
 
-**Format:** Pipe-delimited
+**Format:** pipe-delimited, ordered by `SK_DateID` · **Scope:** Batch1 only
 
-**Scope:** Batch1 only
+Standard smart-key date dimension source — `SK_DateID`, `DateValue`,
+`DateDesc`, and the full calendar/fiscal year/quarter/month/week
+breakdown plus `HolidayFlag`.
 
-**Correction:** the draft only showed 2 fields; the spec defines 4:
+**Row example:** `20040707|2004-07-07|July 7, 2004|2004|2004|20042|2004 Q2|20047|2004 July|200428|2004-W28|3|Wednesday|2004|2004|20051|2005 Q1|0`
 
-| Column | Type | Description | Nullability |
-| --- | --- | --- | --- |
-| TT_ID | CHAR(3) | Trade type code |  |
-| TT_NAME | CHAR(12) | Trade type description |  |
-| TT_IS_SELL | NUM(1) | Flag: is this a sale? |  |
-| TT_IS_MRKT | NUM(1) | Flag: is this a market order? |  |
+---
 
-**Row example:**
-`TMB|Market-Buy|0|1`
+## 1.3 Control & Audit Feeds
 
-## 15. WatchHistory.txt
+These two feeds carry **no business data**. They exist purely to make
+the pipeline auditable and idempotent — see `02_bronze_design.md` §2
+(source classification table, "Operational/Control" archetype) and
+`03_ingestion.md` §3 (idempotency mechanics) for how they're consumed.
 
+### 1.3.1 `BatchDate.txt`
 
-
-**Format:** Pipe-delimited
-
-**Scope:** Batch1 (Historical, no CDC) and Batch2/3 (Incremental, with CDC)
-— `CDC_FLAG` always `'I'`.
-
-| Column | Description | Nullability |
-| --- | --- | --- |
-| W_C_ID | Customer ID |  |
-| W_S_SYMB | Security symbol being watched |  |
-| W_DTS | Timestamp of the action |  |
-| W_ACTION | `ACTV` (activate) or `CNCL` (cancel) |  |
-
-**Row example (Historical Load, no CDC):**
-`17|AAAAAAAAAAAAAJR|2012-07-07 00:03:44|ACTV`
-
-## 16. DailyMarket.txt
-
-
-
-**Format:** Pipe-delimited
-
-**Scope:** Batch1 (Historical, no CDC) and Batch2/3 (Incremental, with CDC)
-— `CDC_FLAG` always `'I'`.
-
-| Column | Description | Nullability |
-| --- | --- | --- |
-| DM_DATE | Date of last completed trading day |  |
-| DM_S_SYMB | Security symbol |  |
-| DM_CLOSE | Closing price |  |
-| DM_HIGH | Highest price that day |  |
-| DM_LOW | Lowest price that day |  |
-| DM_VOL | Volume traded |  |
-
-**Row example (Historical Load, no CDC):**
-`2015-07-06|AAAAAAAAAAAABOY|242.93|284.42|185.08|111904727`
-
-## 17. CashTransaction.txt
-
-
-
-**Format:** Pipe-delimited
-
-**Scope:** Batch1 (Historical, no CDC) and Batch2/3 (Incremental, with CDC)
-— `CDC_FLAG` always `'I'`.
-
-| Column | Description | Nullability |
-| --- | --- | --- |
-| CDC_FLAG | I / U (incremental only) |  |
-| CDC_DSN | Sequence number (incremental only) |  |
-| CT_CA_ID | Account ID |  |
-| CT_DTS | Timestamp |  |
-| CT_AMT | Amount (negative = withdrawal) |  |
-| CT_NAME | Description |  |
-
-**Row example (Batch2):**
-`I|4937695|6507|2017-07-08 10:16:09|5519.45|AYJRCJpzLBMJUWKjS...`
-
-## 18. Date.txt
-
-
-
-**Format:** Pipe-delimited, ordered by SK_DateID
-
-**Scope:** Batch1 only
-
-| Column | Type | Description | Nullability |
-| --- | --- | --- | --- |
-| SK_DateID | IDENT_T | Surrogate key |  |
-| DateValue | CHAR(20) | e.g. `"2004-07-07"` |  |
-| DateDesc | CHAR(20) | e.g. `"July 7, 2004"` |  |
-| CalendarYearID | NUM(4) |  |  |
-| CalendarYearDesc | CHAR(20) |  |  |
-| CalendarQtrID | NUM(5) | e.g. `20042` |  |
-| CalendarQtrDesc | CHAR(20) | e.g. `"2004 Q2"` |  |
-| CalendarMonthID | NUM(6) | e.g. `20047` |  |
-| CalendarMonthDesc | CHAR(20) | e.g. `"2004 July"` |  |
-| CalendarWeekID | NUM(6) | e.g. `200428` |  |
-| CalendarWeekDesc | CHAR(20) | e.g. `"2004-W28"` |  |
-| DayOfWeekNum | NUM(1) |  |  |
-| DayOfWeekDesc | CHAR(10) | e.g. `"Wednesday"` |  |
-| FiscalYearID | NUM(4) |  |  |
-| FiscalYearDesc | CHAR(20) |  |  |
-| FiscalQtrID | NUM(5) |  |  |
-| FiscalQtrDesc | CHAR(20) |  |  |
-| HolidayFlag | BOOLEAN |  |  |
-
-**Row example:**
-
-`20040707|2004-07-07|July 7, 2004|2004|2004|20042|2004 Q2|20047|2004 July|200428|2004-W28|3|Wednesday|2004|2004|20051|2005 Q1|0`
-
-## 19. BatchDate.txt
-
-
-
-**Format:** Plain text, single value
-
-**Scope:** All batches — one control file per batch stating its as-of date
+**Format:** plain text, single value · **Scope:** all batches — one
+control file per batch stating its as-of date
 
 **Real values confirmed for this project:**
+- Batch1: `2017-07-07`
+- Batch2: `2017-07-08`
+- Batch3: `2017-07-09`
 
-* Batch1: `2017-07-07`
-* Batch2: `2017-07-08`
-* Batch3: `2017-07-09`
+This is the **one required file** in the entire pipeline — its absence
+halts the batch rather than being silently skipped. Full reasoning:
+`03_ingestion.md` §3, "Batch idempotency / re-ingestion."
 
-## 20. Audit files (`*_audit.csv`)
+### 1.3.2 Audit files (`*_audit.csv`)
 
+**Format:** CSV, header row present · **Scope:** generated per
+component, per batch
 
+All audit files share the exact same column structure —
+`DataSet, BatchID, Date, Attribute, Value, DValue` — but row content
+differs per component, since each component reports summary statistics
+for its own slice of activity only. These are the vendor-supplied
+**independent reconciliation source** used throughout
+`06_data_quality.md` §6.1.8 and §6.3.
 
-**Format:** CSV, first record contains field names
-
-**Scope:** Generated per component, per batch
-
-All audit files have the exact same structure (columns), but their content (rows) is different.
-
-Each file belongs to a specific part of the system (a component) and shows summary statistics for that part only. Because each component processes different types of data, the metrics (Attribute and Value) in the rows change to match that specific component's activity for each batch.
-
-Columns: `DataSet,BatchID,Date,Attribute,Value,DValue `
-
-Example (from `HR_audit.csv`):
-
+**Example (`HR_audit.csv`):**
 ```text
 DataSet, BatchID ,Date , Attribute , Value, DValue
 DimBroker,1,,HR_BROKERS,4293,
-
 ```
 
-Another example (from `Customer_audit.csv`):
-
+**Example (`Customer_audit.csv`):**
 ```text
 DataSet, BatchID ,Date , Attribute , Value, DValue
 DimAccount,1,,CA_ADDACCT,4280,
@@ -652,5 +393,5 @@ DimCustomer,1,,C_UPDCUST,1284,
 DimCustomer,1,,C_INACT,428,
 DimCustomer,1,,C_DOB_TO,4,
 DimCustomer,1,,C_DOB_TY,4,
-DimCustomer,1,,C_TIER_INV,251,  
+DimCustomer,1,,C_TIER_INV,251,
 ```
