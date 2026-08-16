@@ -101,7 +101,9 @@ distinctly — the grants, docs, and `meta` values already reflect the
 split, so onboarding a second person only requires re-pointing one
 field, not redesigning the model.
 
+**Example: model page showing the `owner` / `data_steward` / `technical_owner`**
 
+![alt text](./images/dim_broker_details_docs.png "dim_broker_details docs screenshot")
 
 ---
 
@@ -247,7 +249,9 @@ cross-platform discovery (data outside dbt's reach) or business-user
 self-service search, which are the actual differentiators of a
 dedicated catalog product.
 
+**Example: dbt docs screenshot showing classification tags**
 
+![alt text](./images/dim_customer_columns_tags.png "dim_broker_details docs screenshot")
 
 ---
 
@@ -290,7 +294,6 @@ Access is enforced at three points, from broadest to narrowest:
 
 
 ---
-
 ## 7.7 PII Masking & Privacy Controls
 
 Reusable masking policies live in `governance`
@@ -298,15 +301,47 @@ Reusable masking policies live in `governance`
 table:
 
 - **Policies:** `mask_pii_string`, `mask_pii_date`, `mask_pii_numeric`
-  — applied via `ALTER TABLE ... SET MASKING POLICY` on every
-  `restricted_pii` column, across bronze, silver, and gold.
-- **Enforcement condition:** `CURRENT_ROLE()`. `role_custodian` and
+  — applied on every `restricted_pii` column, across bronze, silver, and gold.
+- **Enforcement condition:** `CURRENT_ROLE()`. `role_custodian`, `ROLE_DBT_PROD_CI` and
   `ACCOUNTADMIN` see real values; every other role — including
   `role_analyst` — sees the masked form. This is evaluated automatically
   on every query; no per-query logic needed on the consumer side.
 - **Masked representation:** `mask_pii_string` returns `***MASKED***`.
   `mask_pii_numeric`/`mask_pii_date` return `NULL`, since a numeric or
   date value has no natural masked string form.
+
+**Application mechanism differs by layer** — same policies, different
+attach point:
+
+- **Bronze:** applied once, manually, via `governance.sql` —
+  `ALTER TABLE ... MODIFY COLUMN ... SET MASKING POLICY`, run one time
+  after the tables are built. Bronze tables are static in shape, so a
+  one-time manual attach is sufficient; only a future schema change
+  would need a re-run.
+- **Silver / Gold:** applied automatically on every dbt build, via the
+  `apply_pii_masking()` macro (`macros/apply_pii_masking.sql`) wired
+  into each model's `post_hook`:
+
+```sql
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=[...],
+      date_cols=[...],
+      numeric_cols=[...]
+    )
+) }}
+```
+
+  This re-attachment on every run is necessary, not optional — dbt
+  materializes each model via `CREATE OR REPLACE TABLE`, which drops
+  any masking policy bound to the old table object. Without the
+  post_hook, every dbt build would silently unmask every `restricted_pii`
+  column until someone noticed and re-ran the manual `ALTER`.
+
+> [!IMPORTANT]
+> `ROLE_DBT_PROD_CI` role should see the actual values, not the masked form. If dbt saw masked values, it would propagate those into silver/gold, which is not the intended behavior.
+
 
 **Example — `silver_hr.middle_initial`:**
 
@@ -321,7 +356,6 @@ SELECT middle_initial FROM brokerage_dwh.silver.silver_hr LIMIT 5;
 | `***MASKED***` | `N` |
 | `***MASKED***` | `V` |
 | `***MASKED***` | `I` |
-
 
 
 ---

@@ -1,3 +1,9 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['executor_name']
+    )
+) }}
 {#-
     trade_sk NOT hashed -- trade_id directly (ADR-007).
     account_sk resolved via time-aware join to dim_account.

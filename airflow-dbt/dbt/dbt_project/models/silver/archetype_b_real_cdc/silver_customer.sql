@@ -1,3 +1,10 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['last_name','first_name','middle_name','gender','address_line1','address_line2','postal_code','city','state_province','country','primary_email','alternate_email','tax_id','phone1_country_code','phone1_area_code','phone1_number','phone1_extension','phone2_country_code','phone2_area_code','phone2_number','phone2_extension','phone3_country_code','phone3_area_code','phone3_number','phone3_extension'],
+      date_cols=['date_of_birth']
+    )
+) }}
 {#-
     SCD Type 2, unifying two bronze sources for the same entity:
       - bronze_customer: real flat-file CDC, Batch2/3 onward.

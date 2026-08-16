@@ -1,3 +1,9 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['first_name','last_name','middle_initial','phone_number']
+    )
+) }}
 with final as (
     select
         {{ gen_surrogate_key(['employee_id']) }} as broker_sk,

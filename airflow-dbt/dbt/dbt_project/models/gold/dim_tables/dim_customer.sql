@@ -1,3 +1,10 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['tax_id','last_name','first_name','middle_name','gender','address_line1','address_line2','postal_code','city','state_province','country','phone1_country_code','phone1_area_code','phone1_local_number','phone1_extension','phone2_country_code','phone2_area_code','phone2_local_number','phone2_extension','phone3_country_code','phone3_area_code','phone3_local_number','phone3_extension','primary_email','alternate_email'],
+      date_cols=['date_of_birth']
+    )
+) }}
 {#-
     Grain: One row per customer version (SCD Type 2), plus one Unknown
     member row (customer_sk = -1).

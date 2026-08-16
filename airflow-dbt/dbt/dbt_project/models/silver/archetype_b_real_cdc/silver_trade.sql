@@ -1,3 +1,9 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['execution_name']
+    )
+) }}
 {#-
     Per 04_silver.md ADR-002: Trade is split by concern into two models.
     This one owns the latest known STATE of a trade -- grain is one row

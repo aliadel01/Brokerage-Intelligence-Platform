@@ -1,3 +1,10 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['last_name','first_name','middle_initial','gender','address_line1','address_line2','postal_code','city','state','country','phone','marital_status','own_or_rent_flag','employer_name'],
+      numeric_cols=['annual_income','number_of_cars','number_of_children','age','credit_rating','number_of_credit_cards','net_worth']
+    )
+) }}
 {#-
     customer_sk left NULL for every real row -- Prospect-to-Customer
     matching rule still open (gold.md Open Questions #1). Unknown

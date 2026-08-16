@@ -1,3 +1,10 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['last_name','first_name','middle_initial','gender','address_line1','address_line2','postal_code','city','state','country','phone','marital_status','own_or_rent_flag','employer'],
+      numeric_cols=['income','number_cars','number_children','age','credit_rating','number_credit_cards','net_worth']
+    )
+) }}
 {#-
     SCD Type 1 Strategy (Latest State / Overwrite):
     This model implements Type 1 Slowing Changing Dimension for the Prospect entity.

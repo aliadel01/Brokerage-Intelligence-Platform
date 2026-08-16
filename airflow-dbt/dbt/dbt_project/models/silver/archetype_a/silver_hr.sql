@@ -1,3 +1,9 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_pii_masking(
+      string_cols=['first_name','last_name','middle_initial','phone']
+    )
+) }}
 {#-
     Archetype A: static reference dimension, Batch1 only, no CDC.
 -#}
