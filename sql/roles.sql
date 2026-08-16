@@ -133,6 +133,10 @@ GRANT ALL ON FUTURE TABLES IN SCHEMA brokerage_dwh.gold TO ROLE role_dbt_prod_ci
 -- Can log dbt-side DQ results (e.g. failed dbt tests) into the same audit log
 GRANT USAGE ON SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod_ci;
 GRANT INSERT, SELECT ON ALL TABLES IN SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod_ci;
+GRANT ALL ON ALL TABLES IN SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod_ci;
+GRANT ALL ON FUTURE TABLES IN SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod_ci;
+
+GRANT APPLY ON TAG brokerage_dwh.governance.data_classification TO ROLE role_dbt_prod_ci;
 
 -- Can create new schemas in the database if needed (e.g. for new dbt models)
 GRANT CREATE SCHEMA ON DATABASE BROKERAGE_DWH TO ROLE ROLE_DBT_PROD_CI;
@@ -143,3 +147,15 @@ GRANT CREATE SCHEMA ON DATABASE BROKERAGE_DWH TO ROLE ROLE_DBT_PROD_CI;
 -- single compromised credential (or a single bug) corrupt the entire
 -- chain end-to-end, with no boundary in between.
 -- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- 5. role_dbt_test_failures — service account for dbt test failures
+--    This is a separate role so that test failures can be logged to a
+--    separate schema, and so that the test failure logging can be revoked
+--    from the dbt prod CI role if desired (e.g. if you want to keep the
+--    dbt prod CI role as a pure build role, and have test failures logged
+--    by a separate service account).
+-- ---------------------------------------------------------------------------
+GRANT USAGE, CREATE TABLE, CREATE VIEW ON SCHEMA brokerage_dwh.dbt_test_failures TO ROLE ACCOUNTADMIN;
+GRANT ALL ON ALL TABLES IN SCHEMA brokerage_dwh.dbt_test_failures TO ROLE ACCOUNTADMIN;
+GRANT ALL ON FUTURE TABLES IN SCHEMA brokerage_dwh.dbt_test_failures TO ROLE ACCOUNTADMIN;

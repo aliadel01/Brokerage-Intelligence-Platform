@@ -21,6 +21,7 @@ grain, denormalized outriggers.
     - [ADR-006: `originating_trade_id`/`current_trade_id` kept as degenerate dimensions](#adr-006-originating_trade_idcurrent_trade_id-kept-as-degenerate-dimensions)
     - [ADR-007: Universal surrogate keys, with two deliberate exceptions](#adr-007-universal-surrogate-keys-with-two-deliberate-exceptions)
     - [ADR-009: Trade fact split — `fact_trade` (latest state) + `fact_trade_history` (status lineage)](#adr-009-trade-fact-split--fact_trade-latest-state--fact_trade_history-status-lineage)
+  - [](#)
   - [Open questions](#open-questions)
 
 ---
@@ -257,7 +258,7 @@ split exactly:
 **Reason:** full reasoning in `04_silver.md` ADR-002 — gold simply
 carries the same grain decision forward into the star schema.
 
-
+![](./images/fact_trade_history_lineage.png)
 ---
 
 ## Open questions

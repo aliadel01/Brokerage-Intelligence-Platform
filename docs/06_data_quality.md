@@ -231,6 +231,15 @@ Static historical (Batch1-only) tables are explicitly excluded — a
 freshness check on a table that only ever loads once would be a
 guaranteed, meaningless false positive.
 
+**Example usage:**
+```bash
+# run a freshness check on the bronze_account source
+dbt source freshness --select bronze_account
+
+# result
+16:16:36  1 of 10 START freshness of bronze.bronze_account ............................... [RUN]
+16:16:36  1 of 10 WARN freshness of bronze.bronze_account ................................ [WARN in 0.95s]
+```
 
 ### 6.1.11 Metadata backbone
 
@@ -354,10 +363,6 @@ comparison and call it:
   `has_unknown_row` flag per call (`true` for dims, `false` for facts)
   — otherwise every dim would show a false "+1" delta.
 
-Both run on every `dbt build` via `on-run-end`:
-`run_silver_reconciliation_checks()` and
-`run_gold_reconciliation_checks()`.
-
 - `check_type = 'silver_reconciliation'` / `'gold_reconciliation'`
 - `severity = 'PASS'` if delta within threshold, else `'WARNING'` —
   **never fatal**, same reasoning as bronze reconciliation: a mismatch
@@ -399,19 +404,25 @@ Both run on every `dbt build` via `on-run-end`:
 `log_dq_event()` — `07_governance.md` §7.9); no new DDL is needed for
 either check.
 
-```yaml
-on-run-end:
-  - "{{ run_silver_reconciliation_checks() }}"
-  - "{{ run_gold_reconciliation_checks() }}"
-  - "{{ log_test_results(results) }}"
-```
 
 **Code:** `macros/log_reconciliation.sql` (shared core),
 `macros/log_silver_reconciliation.sql` /
 `macros/log_gold_reconciliation.sql` (layer-specific comparison
-builders), `macros/run_silver_reconciliation_checks.sql` /
-`macros/run_gold_reconciliation_checks.sql` (per-model calls), wired
+builders), wired
 via `on-run-end` in `dbt_project.yml`.
+
+
+**Example usage:**
+```sql
+SELECT * FROM BROKERAGE_DWH.GOVERNANCE.DQ_AUDIT_LOG
+```
+
+| LOG_ID | BATCH_ID | CHECK_TYPE | SOURCE_FILE | EXPECTED_VALUE | ACTUAL_VALUE | SEVERITY | MESSAGE | LOGGED_AT |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `1102` | `1` | `silver_reconciliation` | `silver_trade` | 390978 | 390978 | **PASS** | expected=390978 actual=390978 delta=0.00% (threshold 80%) | 2026-08-16 ... |
+| `1041` | `1` | `silver_reconciliation` | `silver_customer` | 14572 | 5702 | **WARNING** | expected=14572 actual=5702 delta=60.87% (threshold 50%) | 2026-08-16 ... |
+| `1101` | `1` | `silver_reconciliation` | `silver_account` | 12860 | 12239 | **PASS** | expected=12860 actual=12239 delta=4.83% (threshold 50%) | 2026-08-16 ... |
+
 
 ---
 
