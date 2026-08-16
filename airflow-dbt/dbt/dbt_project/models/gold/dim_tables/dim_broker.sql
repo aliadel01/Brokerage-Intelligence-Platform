@@ -6,7 +6,7 @@ with final as (
         first_name,
         last_name,
         middle_initial,
-        coalesce(job_code, 'Unknown')      as job_code,
+        coalesce(job_code, -1)      as job_code,
         coalesce(branch, 'Unknown')        as branch_name,
         coalesce(office, 'Unknown')        as office_code,
         phone                              as phone_number
@@ -15,13 +15,13 @@ with final as (
 
 unknown as (
     select
-        -1                    as broker_sk,
+        '-1'                    as broker_sk,
         cast(null as varchar) as employee_id,
         cast(null as varchar) as manager_employee_id,
         'Unknown'             as first_name,
         'Unknown'             as last_name,
         cast(null as varchar) as middle_initial,
-        'Unknown'             as job_code,
+        -1                    as job_code,
         'Unknown'             as branch_name,
         'Unknown'             as office_code,
         cast(null as varchar) as phone_number

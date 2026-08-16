@@ -155,6 +155,7 @@ select
     action_ts,
     _cdc_dsn,
     is_current,
+    _loaded_at,
     _batch_id,
     _source_table
 from final

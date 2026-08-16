@@ -22,8 +22,8 @@ posting_date_dim as (
 
 resolved as (
     select
-        coalesce(company.company_sk, -1)         as company_sk,
-        coalesce(fiscal_date.date_sk, -1)        as fiscal_date_sk,
+        coalesce(company.company_sk, '-1')         as company_sk,
+        coalesce(fiscal_date.date_sk, '-1')        as fiscal_date_sk,
         financials.year              as fiscal_year,
         financials.quarter           as fiscal_quarter,
         financials.revenue,
@@ -37,7 +37,7 @@ resolved as (
         financials.shares_outstanding,
         financials.diluted_shares_outstanding,
         financials._batch_id          as batch_id,
-        coalesce(posting_date_dim.date_sk, -1)   as posting_date_sk
+        coalesce(posting_date_dim.date_sk, '-1')   as posting_date_sk
     from financials
     left join company
         on (

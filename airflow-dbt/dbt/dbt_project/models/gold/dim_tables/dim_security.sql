@@ -39,7 +39,7 @@ final as (
 
 unknown as (
     select
-        -1                    as security_sk,
+        '-1'                    as security_sk,
         'UNKNOWN'             as symbol,
         'Unknown'             as issue_type,
         'Unknown'             as security_status,
@@ -49,7 +49,7 @@ unknown as (
         cast(null as date)    as first_trade_date,
         cast(null as date)    as first_trade_exchange_date,
         cast(null as numeric) as dividend,
-        -1                    as company_sk
+        '-1'                    as company_sk
 )
 
 select * from final

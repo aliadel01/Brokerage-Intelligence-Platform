@@ -5,7 +5,6 @@ with fill_checks as (
     select
         customer_id,
         valid_from_date,
-        status_id    
         last_name,    
         first_name,   
         tier,    
@@ -14,7 +13,6 @@ with fill_checks as (
         state_province,
         country, 
         primary_email,
-        lag(status_id)      over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_status_id,
         lag(last_name)      over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_last_name,
         lag(first_name)     over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_first_name,
         lag(tier)           over (partition by customer_id order by _batch_id , action_ts, _cdc_dsn, _loaded_at) as prev_tier,
@@ -28,8 +26,7 @@ with fill_checks as (
 
 select *
 from fill_checks
-where (prev_status_id is not null and status_id is null)
-   or (prev_last_name is not null and last_name is null) 
+where (prev_last_name is not null and last_name is null) 
    or (prev_first_name is not null and first_name is null)
     or (prev_tier is not null and tier is null)
     or (prev_address_line1 is not null and address_line1 is null)

@@ -18,56 +18,202 @@ snapshot-paths: ["snapshots"]
 # Configuring the "on-run-end" hook to run reconciliation checks after dbt finishes running models.
 on-run-end:
   - >
-    -- depends_on: {{ ref('silver_hr') }}
-    -- depends_on: {{ ref('silver_prospect') }}
-    -- depends_on: {{ ref('silver_account') }}
-    -- depends_on: {{ ref('silver_customer') }}
-    -- depends_on: {{ ref('silver_trade') }}
-    -- depends_on: {{ ref('silver_trade_history') }}
-    -- depends_on: {{ ref('silver_holding_history') }}
-    -- depends_on: {{ ref('silver_watch_history') }}
-    -- depends_on: {{ ref('silver_daily_market') }}
-    -- depends_on: {{ ref('silver_cash_transaction') }}
-    {{ run_silver_reconciliation_checks() }}
+    {% do log_silver_reconciliation(
+        'silver_hr',
+        "select _batch_id, count(*) as bronze_cnt from " ~ source('bronze', 'bronze_hr') ~ " group by 1",
+        ref('silver_hr'),
+        1
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_prospect',
+        "select _batch_id, count(*) as bronze_cnt from " ~ source('bronze', 'bronze_prospect') ~ " group by 1",
+        ref('silver_prospect'),
+        10
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_account',
+        "select _batch_id, count(*) as bronze_cnt from (
+           select _batch_id from " ~ source('bronze', 'bronze_account') ~ "
+           union all
+           select _batch_id from " ~ source('bronze', 'bronze_mgmt_account') ~ "
+         ) u group by 1",
+        ref('silver_account'),
+        50
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_customer',
+        "select _batch_id, count(*) as bronze_cnt from (
+           select _batch_id from " ~ source('bronze', 'bronze_customer') ~ "
+           union all
+           select _batch_id from " ~ source('bronze', 'bronze_mgmt_customer') ~ "
+         ) u group by 1",
+        ref('silver_customer'),
+        50
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_trade',
+        "select _batch_id, count(*) as bronze_cnt from " ~ source('bronze', 'bronze_trade') ~ " group by 1",
+        ref('silver_trade'),
+        80
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_trade_history',
+        "select _batch_id, count(*) as bronze_cnt from (
+           select _batch_id from " ~ source('bronze', 'bronze_trade_history') ~ "
+           union all
+           select _batch_id from " ~ source('bronze', 'bronze_trade') ~ " where _batch_id != 1
+         ) u group by 1",
+        ref('silver_trade_history'),
+        30
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_holding_history',
+        "select _batch_id, count(*) as bronze_cnt from " ~ source('bronze', 'bronze_holding_history') ~ " group by 1",
+        ref('silver_holding_history'),
+        2
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_watch_history',
+        "select _batch_id, count(*) as bronze_cnt from " ~ source('bronze', 'bronze_watch_history') ~ " group by 1",
+        ref('silver_watch_history'),
+        2
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_daily_market',
+        "select _batch_id, count(*) as bronze_cnt from " ~ source('bronze', 'bronze_daily_market') ~ " group by 1",
+        ref('silver_daily_market'),
+        2
+    ) %}
+    {% do log_silver_reconciliation(
+        'silver_cash_transaction',
+        "select _batch_id, count(*) as bronze_cnt from " ~ source('bronze', 'bronze_cash_transaction') ~ " group by 1",
+        ref('silver_cash_transaction'),
+        2
+    ) %}
 
   - >
-    -- depends_on: {{ ref('silver_date') }}
-    -- depends_on: {{ ref('silver_time') }}
-    -- depends_on: {{ ref('silver_status_type') }}
-    -- depends_on: {{ ref('silver_trade_type') }}
-    -- depends_on: {{ ref('silver_hr') }}
-    -- depends_on: {{ ref('silver_customer') }}
-    -- depends_on: {{ ref('silver_account') }}
-    -- depends_on: {{ ref('silver_prospect') }}
-    -- depends_on: {{ ref('silver_finwire_company') }}
-    -- depends_on: {{ ref('silver_finwire_security') }}
-    -- depends_on: {{ ref('silver_trade') }}
-    -- depends_on: {{ ref('silver_cash_transaction') }}
-    -- depends_on: {{ ref('silver_watch_history') }}
-    -- depends_on: {{ ref('silver_daily_market') }}
-    -- depends_on: {{ ref('silver_finwire_financials') }}
-    -- depends_on: {{ ref('silver_holding_history') }}
-    -- depends_on: {{ ref('silver_trade_history') }}
-    -- depends_on: {{ ref('dim_date') }}
-    -- depends_on: {{ ref('dim_time') }}
-    -- depends_on: {{ ref('dim_statustype') }}
-    -- depends_on: {{ ref('dim_tradetype') }}
-    -- depends_on: {{ ref('dim_broker') }}
-    -- depends_on: {{ ref('dim_customer') }}
-    -- depends_on: {{ ref('dim_account') }}
-    -- depends_on: {{ ref('dim_prospect') }}
-    -- depends_on: {{ ref('dim_company') }}
-    -- depends_on: {{ ref('dim_security') }}
-    -- depends_on: {{ ref('fact_trade') }}
-    -- depends_on: {{ ref('fact_cashtransaction') }}
-    -- depends_on: {{ ref('fact_watchitem') }}
-    -- depends_on: {{ ref('fact_market_history') }}
-    -- depends_on: {{ ref('fact_company_financials') }}
-    -- depends_on: {{ ref('fact_holding') }}
-    -- depends_on: {{ ref('fact_trade_history') }}
-    {{ run_gold_reconciliation_checks() }}
+    {% do log_gold_reconciliation(
+        'dim_date',
+        "select count(*) from " ~ ref('silver_date'),
+        ref('dim_date'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_time',
+        "select count(*) from " ~ ref('silver_time'),
+        ref('dim_time'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_statustype',
+        "select count(*) from " ~ ref('silver_status_type'),
+        ref('dim_statustype'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_tradetype',
+        "select count(*) from " ~ ref('silver_trade_type'),
+        ref('dim_tradetype'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_broker',
+        "select count(*) from " ~ ref('silver_hr'),
+        ref('dim_broker'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_customer',
+        "select count(*) from " ~ ref('silver_customer'),
+        ref('dim_customer'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_account',
+        "select count(*) from " ~ ref('silver_account'),
+        ref('dim_account'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_prospect',
+        "select count(*) from " ~ ref('silver_prospect'),
+        ref('dim_prospect'),
+        2,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_company',
+        "select count(*) from " ~ ref('silver_finwire_company'),
+        ref('dim_company'),
+        60,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'dim_security',
+        "select count(*) from " ~ ref('silver_finwire_security'),
+        ref('dim_security'),
+        60,
+        true
+    ) %}
+    {% do log_gold_reconciliation(
+        'fact_trade',
+        "select count(*) from " ~ ref('silver_trade'),
+        ref('fact_trade'),
+        2,
+        false
+    ) %}
+    {% do log_gold_reconciliation(
+        'fact_cashtransaction',
+        "select count(*) from " ~ ref('silver_cash_transaction'),
+        ref('fact_cashtransaction'),
+        2,
+        false
+    ) %}
+    {% do log_gold_reconciliation(
+        'fact_watchitem',
+        "select count(*) from " ~ ref('silver_watch_history'),
+        ref('fact_watchitem'),
+        2,
+        false
+    ) %}
+    {% do log_gold_reconciliation(
+        'fact_market_history',
+        "select count(*) from " ~ ref('silver_daily_market'),
+        ref('fact_market_history'),
+        2,
+        false
+    ) %}
+    {% do log_gold_reconciliation(
+        'fact_company_financials',
+        "select count(*) from " ~ ref('silver_finwire_financials'),
+        ref('fact_company_financials'),
+        2,
+        false
+    ) %}
+    {% do log_gold_reconciliation(
+        'fact_holding',
+        "select count(*) from " ~ ref('silver_holding_history'),
+        ref('fact_holding'),
+        15,
+        false
+    ) %}
+    {% do log_gold_reconciliation(
+        'fact_trade_history',
+        "select count(*) from " ~ ref('silver_trade_history'),
+        ref('fact_trade_history'),
+        15,
+        false
+    ) %}
 
-  - "{{ log_test_results(results) }}"
+  - "{% do log_test_results(results) %}"
+
 
 # setting a default variable for the reconciliation threshold percentage.
 vars:

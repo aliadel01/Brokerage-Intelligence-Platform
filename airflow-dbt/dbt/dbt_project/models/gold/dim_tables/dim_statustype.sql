@@ -8,7 +8,7 @@ with final as (
 
 unknown as (
     select
-        -1     as status_type_sk,
+        '-1'   as status_type_sk,
         'UNK'  as status_code,
         'Unknown' as status_name
 )

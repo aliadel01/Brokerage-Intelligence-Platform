@@ -66,8 +66,8 @@ final as (
 
 unknown as (
     select
-        -1                    as customer_sk,
-        'UNKNOWN'             as customer_id,
+        '-1'                    as customer_sk,
+        -1                      as customer_id,
         cast(null as varchar) as tax_id,
         'Unknown'             as customer_status,
         'Unknown'             as last_name,

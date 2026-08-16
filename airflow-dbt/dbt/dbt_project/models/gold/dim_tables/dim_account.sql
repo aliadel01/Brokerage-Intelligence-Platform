@@ -40,13 +40,13 @@ final as (
 
 unknown as (
     select
-        -1                  as account_sk,
-        'Unknown'           as account_id,
+        '-1'                 as account_sk,
+        -1                  as account_id,
         'Unknown'           as account_name,
         'Unknown'           as tax_status,
         'Unknown'           as account_status,
-        -1                  as broker_sk,
-        -1                  as customer_sk,
+        '-1'                as broker_sk,
+        '-1'                as customer_sk,
         date '1900-01-01'   as effective_start_date,
         cast(null as date)  as effective_end_date,
         false               as is_current,

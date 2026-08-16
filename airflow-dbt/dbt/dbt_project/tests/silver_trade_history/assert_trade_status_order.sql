@@ -8,7 +8,7 @@ select *
 from ordered
 where (prev_status, status_id) not in (
 
-  ('PNDG','SBMT'), ('PNDG','CANC'), ('SBMT','CMPT'), ('SBMT','CANC'), ('CMPT','INAC'), ('CANC','INAC')
+  ('PNDG','SBMT'), ('PNDG','CANC'), ('SBMT','CMPT'), ('SBMT','CANC'), ('CMPT','INAC'), ('CANC','INAC'), ('PNDG', 'CNCL')
 
 )
 and prev_status is not null

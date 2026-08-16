@@ -37,7 +37,7 @@ final as (
 
 unknown as (
     select
-        -1                    as company_sk,
+        '-1'                    as company_sk,
         cast(null as bigint)  as company_cik,
         'Unknown'             as company_name,
         'Unknown'             as company_status,

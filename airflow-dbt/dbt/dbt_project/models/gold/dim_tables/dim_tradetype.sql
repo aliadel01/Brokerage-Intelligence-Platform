@@ -10,7 +10,7 @@ with final as (
 
 unknown as (
     select
-        -1                       as trade_type_sk,
+        '-1'                       as trade_type_sk,
         'UNK'                    as trade_type_code,
         'Unknown'                as trade_type_name,
         cast(null as boolean)    as is_sell_flag,

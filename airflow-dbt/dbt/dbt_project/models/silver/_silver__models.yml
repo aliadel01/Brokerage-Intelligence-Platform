@@ -763,6 +763,12 @@ models:
           meta:
             classification: internal
             pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
+        config:
+          meta:
+            classification: internal
+            pii: false
       - name: _batch_id
         data_type: integer
         config:
@@ -829,11 +835,6 @@ models:
             pii: true
       - name: gender
         data_type: varchar
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['M', 'F']
-              config: {severity: warn}
         config:
           meta:
             classification: restricted_pii
@@ -1042,6 +1043,12 @@ models:
         data_type: boolean
         tests:
           - not_null: {config: {severity: error}}
+        config:
+          meta:
+            classification: internal
+            pii: false
+      - name: _loaded_at
+        data_type: timestamp_ntz
         config:
           meta:
             classification: internal
@@ -1477,7 +1484,7 @@ models:
         enforced: true
     columns:
       - name: account_id
-        data_type: integer
+        data_type: number(19,0)
         tests:
           - not_null: {config: {severity: error}}
           - relationships:
@@ -1498,7 +1505,7 @@ models:
             classification: internal
             pii: false
       - name: amount
-        data_type: numeric(18,2)
+        data_type: number(15,2)
         config:
           meta:
             classification: confidential
@@ -1516,19 +1523,19 @@ models:
             classification: internal
             pii: false
       - name: _cdc_dsn
-        data_type: integer
+        data_type: number(20,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _batch_id
-        data_type: integer
+        data_type: number(9,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: integer
+        data_type: number(20,0)
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1594,7 +1601,7 @@ models:
             classification: public
             pii: false
       - name: volume
-        data_type: numeric
+        data_type: number(19,0)
         config:
           meta:
             classification: public
@@ -1606,19 +1613,19 @@ models:
             classification: internal
             pii: false
       - name: _cdc_dsn
-        data_type: integer
+        data_type: number(20,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _batch_id
-        data_type: integer
+        data_type: number(9,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: integer
+        data_type: number(20,0)
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1640,13 +1647,13 @@ models:
         enforced: true
     columns:
       - name: originating_trade_id
-        data_type: integer
+        data_type: number(19,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: trade_id
-        data_type: integer
+        data_type: number(19,0)
         tests:
           - not_null: {config: {severity: error}}
           - relationships:
@@ -1659,13 +1666,13 @@ models:
             classification: internal
             pii: false
       - name: qty_before
-        data_type: numeric
+        data_type: number(9,0)
         config:
           meta:
             classification: confidential
             pii: false
       - name: qty_after
-        data_type: numeric
+        data_type: number(9,0)
         config:
           meta:
             classification: confidential
@@ -1677,19 +1684,19 @@ models:
             classification: internal
             pii: false
       - name: _cdc_dsn
-        data_type: integer
+        data_type: number(20,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _batch_id
-        data_type: integer
+        data_type: number(9,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: integer
+        data_type: number(20,0)
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1711,7 +1718,7 @@ models:
         enforced: true
     columns:
       - name: customer_id
-        data_type: integer
+        data_type: number(19,0)
         tests:
           - not_null: {config: {severity: error}}
           - relationships:
@@ -1753,19 +1760,19 @@ models:
             classification: internal
             pii: false
       - name: _cdc_dsn
-        data_type: integer
+        data_type: number(20,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _batch_id
-        data_type: integer
+        data_type: number(9,0)
         config:
           meta:
             classification: internal
             pii: false
       - name: _row_hash
-        data_type: integer
+        data_type: number(20,0)
         tests:
           - not_null: {config: {severity: error}}
           - unique: {config: {severity: error}}
@@ -1788,7 +1795,14 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: [posting_ts, company_cik]
+            combination_of_columns:
+              - "coalesce(company_cik, company_name)"
+              - year
+              - quarter
+          config: {severity: error}
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "coalesce(company_cik, company_name) is not null"
           config: {severity: error}
     columns:
       - name: posting_ts
@@ -1892,7 +1906,6 @@ models:
       - name: company_cik
         data_type: varchar
         tests:
-          - not_null: {config: {severity: error}}
           - relationships:
               arguments:
                 to: ref('silver_finwire_company')

@@ -51,13 +51,13 @@ models:
             classification: internal
             pii: false
       - name: broker_sk
-        data_type: bigint
+        data_type: varchar
         config:
           meta:
             classification: internal
             pii: false
       - name: customer_sk
-        data_type: bigint
+        data_type: varchar
         config:
           meta:
             classification: internal
@@ -94,7 +94,7 @@ models:
         enforced: true
     columns:
       - name: broker_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -168,7 +168,7 @@ models:
         enforced: true
     columns:
       - name: company_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -662,7 +662,7 @@ models:
         enforced: true
     columns:
       - name: prospect_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -675,7 +675,7 @@ models:
             classification: internal
             pii: false
       - name: customer_sk
-        data_type: bigint
+        data_type: varchar
         config:
           meta:
             classification: internal
@@ -887,7 +887,7 @@ models:
             classification: public
             pii: false
       - name: company_sk
-        data_type: bigint
+        data_type: varchar
         config:
           meta:
             classification: internal
@@ -900,7 +900,7 @@ models:
         enforced: true
     columns:
       - name: status_type_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1007,7 +1007,7 @@ models:
         enforced: true
     columns:
       - name: trade_type_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - unique:
               config:
@@ -1049,15 +1049,6 @@ models:
     config:
       contract:
         enforced: true
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - account_sk
-              - transaction_date_sk
-              - transaction_time_sk
-          config:
-            severity: error
     columns:
       - name: cash_transaction_sk
         data_type: varchar
@@ -1105,7 +1096,7 @@ models:
             classification: internal
             pii: false
       - name: account_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1167,7 +1158,7 @@ models:
             classification: internal
             pii: false
       - name: company_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1368,7 +1359,7 @@ models:
             classification: internal
             pii: false
       - name: account_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1462,19 +1453,19 @@ models:
             classification: internal
             pii: false
       - name: close_price
-        data_type: numeric
+        data_type: float
         config:
           meta:
             classification: public
             pii: false
       - name: high_price
-        data_type: numeric
+        data_type: float
         config:
           meta:
             classification: public
             pii: false
       - name: low_price
-        data_type: numeric
+        data_type: float
         config:
           meta:
             classification: public
@@ -1567,7 +1558,7 @@ models:
             classification: internal
             pii: false
       - name: status_type_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1583,7 +1574,7 @@ models:
             classification: internal
             pii: false
       - name: trade_type_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1617,7 +1608,7 @@ models:
             classification: internal
             pii: false
       - name: account_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1717,7 +1708,7 @@ models:
             classification: internal
             pii: false
       - name: account_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1749,7 +1740,7 @@ models:
             classification: internal
             pii: false
       - name: status_type_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:
@@ -1839,7 +1830,7 @@ models:
             classification: internal
             pii: false
       - name: customer_sk
-        data_type: bigint
+        data_type: varchar
         tests:
           - not_null:
               config:

@@ -35,9 +35,9 @@ resolved as (
         trade_history.trade_id,
         trade.account_sk,
         trade.security_sk,
-        coalesce(status_type.status_type_sk, -1)  as status_type_sk,
-        coalesce(status_date.date_sk, -1)         as status_date_sk,
-        coalesce(status_time.time_sk, -1)         as status_time_sk,
+        coalesce(status_type.status_type_sk, '-1')  as status_type_sk,
+        coalesce(status_date.date_sk, '-1')         as status_date_sk,
+        coalesce(status_time.time_sk, '-1')         as status_time_sk,
         trade_history._source_model                as source_model,
         trade_history._batch_id                    as batch_id
     from trade_history

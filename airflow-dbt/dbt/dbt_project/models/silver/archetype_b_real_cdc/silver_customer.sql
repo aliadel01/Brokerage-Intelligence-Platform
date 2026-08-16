@@ -261,5 +261,6 @@ select
     action_ts,
     _cdc_dsn,
     _batch_id,
+    _loaded_at,
     _source_table
 from final

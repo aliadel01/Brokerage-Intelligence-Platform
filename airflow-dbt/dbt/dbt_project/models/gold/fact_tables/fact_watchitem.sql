@@ -21,8 +21,8 @@ watch_time as (
 
 resolved as (
     select
-        coalesce(customer.customer_sk, -1)  as customer_sk,
-        coalesce(security.security_sk, -1)  as security_sk,
+        coalesce(customer.customer_sk, '-1')  as customer_sk,
+        coalesce(security.security_sk, '-1')  as security_sk,
         coalesce(watch_date.date_sk, -1)    as watch_date_sk,
         coalesce(watch_time.time_sk, -1)    as watch_time_sk,
         watch.watch_action    as action_code,

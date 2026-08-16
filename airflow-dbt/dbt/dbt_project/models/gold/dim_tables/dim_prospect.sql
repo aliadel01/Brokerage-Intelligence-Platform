@@ -8,7 +8,7 @@
 with prospect_final as (
     select
         {{ gen_surrogate_key(['agency_id']) }} as prospect_sk,
-        cast(null as bigint)               as customer_sk,
+        cast(null as varchar)                    as customer_sk,
         agency_id,
         last_name,
         first_name,
@@ -36,8 +36,8 @@ with prospect_final as (
 
 unknown as (
     select
-        -1                    as prospect_sk,
-        cast(null as bigint)  as customer_sk,
+        '-1'                  as prospect_sk,
+        cast(null as varchar) as customer_sk,
         cast(null as varchar) as agency_id,
         'Unknown'             as last_name,
         'Unknown'             as first_name,

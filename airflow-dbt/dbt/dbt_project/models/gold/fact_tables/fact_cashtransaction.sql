@@ -17,11 +17,12 @@ txn_time as (
 
 resolved as (
     select
-        coalesce(txn_date.date_sk, -1)    as transaction_date_sk,
-        coalesce(txn_time.time_sk, -1)    as transaction_time_sk,
-        coalesce(account.account_sk, -1)  as account_sk,
+        coalesce(txn_date.date_sk, '-1')    as transaction_date_sk,
+        coalesce(txn_time.time_sk, '-1')    as transaction_time_sk,
+        coalesce(account.account_sk, '-1')  as account_sk,
         cash.amount,
         cash.description,
+        cash._row_hash as row_hash,
         cash._batch_id         as batch_id
     from cash
     left join account
@@ -35,6 +36,11 @@ resolved as (
 )
 
 select
-    {{ gen_surrogate_key(['account_sk', 'transaction_date_sk', 'transaction_time_sk']) }} as cash_transaction_sk,
-    *
+    {{ gen_surrogate_key(['row_hash']) }} as cash_transaction_sk,
+    transaction_date_sk,
+    transaction_time_sk,
+    account_sk,
+    amount,
+    description,
+    batch_id
 from resolved
