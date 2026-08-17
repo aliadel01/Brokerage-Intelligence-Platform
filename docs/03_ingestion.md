@@ -380,8 +380,7 @@ recorded separately in `governance.dq_audit_log` — §3.5 above and
 `06_data_quality.md` §6.3. `_dq_errors` and `dq_audit_log` operate at
 different grains: `_dq_errors` is per row/column, carried on the row
 itself; `dq_audit_log` is per batch/per check, in its own table.
-Neither is process/debug output — that's the operational log
-(`logging_setup.py`), not persisted to Snowflake
+Neither is process/debug output — that's the operational log, not persisted to Snowflake
 (`07_governance.md` §7.9).
 
 ---

@@ -22,6 +22,7 @@ a table behind it, not only a policy statement.
   - [7.4 Data Lineage](#74-data-lineage)
     - [Row-level lineage — the metadata envelope](#row-level-lineage--the-metadata-envelope)
     - [Table/model-level lineage — the dbt DAG](#tablemodel-level-lineage--the-dbt-dag)
+  - [](#)
   - [7.5 Metadata Management and Data Catalogs](#75-metadata-management-and-data-catalogs)
   - [7.6 Access Control Paradigms](#76-access-control-paradigms)
   - [7.7 PII Masking \& Privacy Controls](#77-pii-masking--privacy-controls)
@@ -32,9 +33,10 @@ a table behind it, not only a policy statement.
     - [Restricted-PII access auditing](#restricted-pii-access-auditing)
     - [Point-in-time reconstruction](#point-in-time-reconstruction)
     - [DQ-as-Control on ingestion](#dq-as-control-on-ingestion)
-    - [Operational logging (`logging_setup.py`)](#operational-logging-logging_setuppy)
+    - [Operational logging](#operational-logging)
   - [7.10 Regulatory Compliance Mapping](#710-regulatory-compliance-mapping)
   - [7.11 Data Exposures \& Downstream Consumers](#711-data-exposures--downstream-consumers)
+  - [](#-1)
   - [Open items](#open-items)
 
 ---
@@ -48,16 +50,19 @@ per-user grants. RBAC is the standard paradigm for a small platform team;
 see [7.6](#76-access-control-paradigms) for why RBAC was chosen over
 attribute-based control (ABAC) here.
 
-Five roles, split along two axes: **service account vs. human login**,
+Four roles, split along two axes: **service account vs. human login**,
 and **which layer they may see**. Full grant script: `sql/roles.sql`.
+Table now:
 
 | Role | Identity type | Layer access | Purpose |
 |---|---|---|---|
-| `role_bronze_loader` | Service account (Python ingestion) | Bronze only — `SELECT`/`INSERT`/`DELETE`, stage `READ`/`WRITE` | The identity `main.py` authenticates as. Never a human credential. Also `INSERT`/`SELECT` on `governance.dq_audit_log`. |
-| `role_custodian` | Human | Bronze + Silver + Gold, read-only, plus `governance` | The "sees everything unmasked" role. Masking policies explicitly unmask for this role (and `ACCOUNTADMIN`). In practice the platform owner — trusted for debugging, audits, verification. |
-| `role_analyst` | Human | Silver + Gold, read-only | No bronze access — enforced by explicit `REVOKE`, not omission. `restricted_pii` columns render masked. `confidential` columns are visible. Represents any downstream BI/analytics consumer. |
-| `role_dbt_prod_ci` | Service account (dbt runs) | Bronze read-only; full build rights on Silver + Gold | The identity that materializes dbt models. Logs to `governance.dq_audit_log` (e.g. failed tests). |
-| `role_steward` | Human | Silver + Gold, read-only | Owns *business meaning* — definitions, classification correctness, whether logic still matches the business. `restricted_pii` stays masked, same as `role_analyst`. Recorded as `data_steward` in model `meta`. |
+| `role_bronze_loader` | Service account (Python ingestion) | Bronze only — `SELECT`/`INSERT`/`DELETE`, stage `READ`/`WRITE` | Identity `main.py` run as. Never human credential. Also `INSERT`/`SELECT` on `governance.dq_audit_log`. |
+| `role_custodian` | Human | Bronze + Silver + Gold, read-only, plus `governance` read | "Sees everything unmasked" role. Masking policies unmask for this role + `ACCOUNTADMIN`. Platform owner — debugging, audits, verification. |
+| `role_analyst` | Human | Silver + Gold, read-only | No bronze — explicit `REVOKE`, not omission. No `governance` — revoked too. `restricted_pii` masked. Downstream BI/analytics consumer. |
+| `role_dbt_prod_ci` | Service account (dbt runs) | Bronze read-only; full build rights Silver + Gold; full rights on `governance` tables; `CREATE SCHEMA` on database | Identity materializing dbt models. Logs to `governance.dq_audit_log` (failed tests). Holds `APPLY` on masking policies + classification tag (needed to build masked columns). |
+
+
+> The `brokerage_dwh.dbt_test_failures` schema is fully owned by `ACCOUNTADMIN`, while `role_dbt_prod_ci` handles writes into it via dbt
 
 **Design principle — Segregation of Duties (SoD):** `role_bronze_loader`
 and `role_dbt_prod_ci` are kept deliberately separate. One identity able
@@ -135,9 +140,7 @@ CREATE TAG IF NOT EXISTS data_classification
 ```
 
 Every PII/financial column across bronze, silver, and gold is tagged
-directly at the warehouse level via `ALTER TABLE ... MODIFY COLUMN ...
-SET TAG` (`sql/classification_tags.sql`, covers bronze archetypes A–E,
-silver, gold). This is deliberate: the tag is queryable and enforceable
+directly at the warehouse level via `sql/classification_tags.sql`covers bronze and applied automatically on every dbt build, via the **apply_classification_tags()** macro (`macros/governance/apply_classification_tags.sql`) wired into each model's post_hook. This is deliberate: the tag is queryable and enforceable
 regardless of which tool touches the column — dbt, a raw SQL client, a
 BI tool — it does not depend on anyone reading documentation first.
 
@@ -209,7 +212,7 @@ not just a dependency graph, it's an audit trail: "how was this gold
 column derived" always has a one-hop or two-hop answer, never a black
 box.
 
-
+![](./images/fact_trade_history_lineage.png)
 ---
 
 ## 7.5 Metadata Management and Data Catalogs
@@ -512,8 +515,7 @@ Mismatches stay non-fatal — a mismatch can have a legitimate
 explanation, so it's surfaced for human review rather than aborting the
 batch automatically.
 
-### Operational logging (`logging_setup.py`)
-
+### Operational logging
 Separate again from the two evidence tables above — this is
 process/progress output, not business evidence, and is **not** written
 to Snowflake. Console handler always on; file handler added when
@@ -560,6 +562,7 @@ exercise — nothing downstream actually consumes those models today.
 An exposure only makes sense once real gold models exist to point at,
 which is why this section comes after the star schema, not before it.
 
+![](./images/power_bi_explosure.png)
 ---
 
 ## Open items
