@@ -56,12 +56,26 @@ models:
           meta:
             classification: internal
             pii: false
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_broker')
+                field: broker_sk
+              config:
+                severity: warn
       - name: customer_sk
         data_type: varchar
         config:
           meta:
             classification: internal
             pii: false
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_sk
+              config:
+                severity: warn
       - name: effective_start_date
         data_type: date
         config:
@@ -114,6 +128,13 @@ models:
             pii: false
       - name: manager_employee_id
         data_type: integer
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_broker')
+                field: employee_id
+              config:
+                severity: warn
         config:
           meta:
             classification: confidential
@@ -888,6 +909,16 @@ models:
             pii: false
       - name: company_sk
         data_type: varchar
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              arguments:
+                to: ref('dim_company')
+                field: company_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1316,12 +1347,32 @@ models:
             pii: false
       - name: originating_trade_id
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              arguments:
+                to: ref('fact_trade')
+                field: trade_id
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
             pii: false
       - name: current_trade_id
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              arguments:
+                to: ref('fact_trade')
+                field: trade_id
+              config:
+                severity: warn
         config:
           meta:
             classification: internal
@@ -1697,6 +1748,16 @@ models:
             pii: false
       - name: trade_sk
         data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - relationships:
+              arguments:
+                to: ref('fact_trade')
+                field: trade_sk
+              config:
+                severity: warn
         config:
           meta:
             classification: internal

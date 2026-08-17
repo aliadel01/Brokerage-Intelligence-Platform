@@ -22,7 +22,6 @@ a table behind it, not only a policy statement.
   - [7.4 Data Lineage](#74-data-lineage)
     - [Row-level lineage — the metadata envelope](#row-level-lineage--the-metadata-envelope)
     - [Table/model-level lineage — the dbt DAG](#tablemodel-level-lineage--the-dbt-dag)
-  - [](#)
   - [7.5 Metadata Management and Data Catalogs](#75-metadata-management-and-data-catalogs)
   - [7.6 Access Control Paradigms](#76-access-control-paradigms)
   - [7.7 PII Masking \& Privacy Controls](#77-pii-masking--privacy-controls)
@@ -36,7 +35,6 @@ a table behind it, not only a policy statement.
     - [Operational logging](#operational-logging)
   - [7.10 Regulatory Compliance Mapping](#710-regulatory-compliance-mapping)
   - [7.11 Data Exposures \& Downstream Consumers](#711-data-exposures--downstream-consumers)
-  - [](#-1)
   - [Open items](#open-items)
 
 ---
@@ -58,7 +56,7 @@ Table now:
 |---|---|---|---|
 | `role_bronze_loader` | Service account (Python ingestion) | Bronze only — `SELECT`/`INSERT`/`DELETE`, stage `READ`/`WRITE` | Identity `main.py` run as. Never human credential. Also `INSERT`/`SELECT` on `governance.dq_audit_log`. |
 | `role_custodian` | Human | Bronze + Silver + Gold, read-only, plus `governance` read | "Sees everything unmasked" role. Masking policies unmask for this role + `ACCOUNTADMIN`. Platform owner — debugging, audits, verification. |
-| `role_analyst` | Human | Silver + Gold, read-only | No bronze — explicit `REVOKE`, not omission. No `governance` — revoked too. `restricted_pii` masked. Downstream BI/analytics consumer. |
+| `role_analyst` | Human | Silver + Gold, read-only + `USAGE` on `bi_wh` | No bronze — explicit `REVOKE`, not omission. No `governance` — revoked too. `restricted_pii` masked. Downstream BI/analytics consumer. |
 | `role_dbt_prod_ci` | Service account (dbt runs) | Bronze read-only; full build rights Silver + Gold; full rights on `governance` tables; `CREATE SCHEMA` on database | Identity materializing dbt models. Logs to `governance.dq_audit_log` (failed tests). Holds `APPLY` on masking policies + classification tag (needed to build masked columns). |
 
 
@@ -213,6 +211,7 @@ column derived" always has a one-hop or two-hop answer, never a black
 box.
 
 ![](./images/fact_trade_history_lineage.png)
+
 ---
 
 ## 7.5 Metadata Management and Data Catalogs
@@ -563,6 +562,7 @@ An exposure only makes sense once real gold models exist to point at,
 which is why this section comes after the star schema, not before it.
 
 ![](./images/power_bi_explosure.png)
+
 ---
 
 ## Open items
