@@ -30,8 +30,14 @@
 --
 -- No manual partitioning / CLUSTER BY at this stage (see prior ADR notes).
 -- Use the default compute warehouse "COMPUTE_WH".
+-- Build bi_wh as a separate warehouse for BI/analytics workloads.
 -- ============================================================================
 
+CREATE WAREHOUSE IF NOT EXISTS bi_wh
+  WAREHOUSE_SIZE = 'XSMALL'
+  AUTO_SUSPEND = 60
+  AUTO_RESUME = TRUE;
+    
 CREATE DATABASE IF NOT EXISTS brokerage_dwh;
 CREATE SCHEMA IF NOT EXISTS brokerage_dwh.bronze;
 USE SCHEMA brokerage_dwh.bronze;

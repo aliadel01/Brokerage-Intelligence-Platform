@@ -75,6 +75,7 @@ CREATE ROLE IF NOT EXISTS role_analyst;
 
 GRANT USAGE ON WAREHOUSE compute_wh TO ROLE role_analyst;
 GRANT USAGE ON DATABASE brokerage_dwh TO ROLE role_analyst;
+GRANT USAGE ON WAREHOUSE bi_wh TO ROLE role_analyst;
 
 GRANT USAGE ON SCHEMA brokerage_dwh.silver TO ROLE role_analyst;
 GRANT SELECT ON ALL TABLES IN SCHEMA brokerage_dwh.silver TO ROLE role_analyst;
