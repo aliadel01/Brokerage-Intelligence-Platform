@@ -137,6 +137,9 @@ GRANT ALL ON ALL TABLES IN SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod
 GRANT ALL ON FUTURE TABLES IN SCHEMA brokerage_dwh.governance TO ROLE role_dbt_prod_ci;
 
 GRANT APPLY ON TAG brokerage_dwh.governance.data_classification TO ROLE role_dbt_prod_ci;
+GRANT APPLY ON MASKING POLICY brokerage_dwh.governance.mask_pii_string TO ROLE role_dbt_prod_ci;
+GRANT APPLY ON MASKING POLICY brokerage_dwh.governance.mask_pii_date TO ROLE role_dbt_prod_ci;
+GRANT APPLY ON MASKING POLICY brokerage_dwh.governance.mask_pii_numeric TO ROLE role_dbt_prod_ci;
 
 -- Can create new schemas in the database if needed (e.g. for new dbt models)
 GRANT CREATE SCHEMA ON DATABASE BROKERAGE_DWH TO ROLE ROLE_DBT_PROD_CI;
