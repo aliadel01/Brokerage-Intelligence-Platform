@@ -1,9 +1,42 @@
 {{ config(
     materialized='table',
-    post_hook=apply_pii_masking(
-      string_cols=['last_name','first_name','middle_initial','gender','address_line1','address_line2','postal_code','city','state','country','phone','marital_status','own_or_rent_flag','employer'],
-      numeric_cols=['income','number_cars','number_children','age','credit_rating','number_credit_cards','net_worth']
-    )
+    post_hook=
+      apply_pii_masking(
+        relation='silver.silver_prospect',
+        string_cols=['last_name','first_name','middle_initial','gender','address_line1','address_line2','postal_code','city','state','country','phone','marital_status','own_or_rent_flag','employer'],
+        numeric_cols=['income','number_cars','number_children','age','credit_rating','number_credit_cards','net_worth']
+      )
+      +
+      apply_classification_tags(
+        relation='silver.silver_prospect',
+        tags={
+          'agency_id': 'confidential',
+          'last_name': 'restricted_pii',
+          'first_name': 'restricted_pii',
+          'middle_initial': 'restricted_pii',
+          'gender': 'restricted_pii',
+          'address_line1': 'restricted_pii',
+          'address_line2': 'restricted_pii',
+          'postal_code': 'restricted_pii',
+          'city': 'restricted_pii',
+          'state': 'restricted_pii',
+          'country': 'restricted_pii',
+          'phone': 'restricted_pii',
+          'income': 'restricted_pii',
+          'number_cars': 'restricted_pii',
+          'number_children': 'restricted_pii',
+          'marital_status': 'restricted_pii',
+          'age': 'restricted_pii',
+          'credit_rating': 'restricted_pii',
+          'own_or_rent_flag': 'restricted_pii',
+          'employer': 'restricted_pii',
+          'number_credit_cards': 'restricted_pii',
+          'net_worth': 'restricted_pii',
+          '_batch_id': 'internal',
+          '_row_hash': 'internal',
+          '_loaded_at': 'internal'
+        }
+      )
 ) }}
 {#-
     SCD Type 1 Strategy (Latest State / Overwrite):

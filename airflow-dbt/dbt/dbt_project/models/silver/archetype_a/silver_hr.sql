@@ -1,8 +1,27 @@
 {{ config(
     materialized='table',
-    post_hook=apply_pii_masking(
-      string_cols=['first_name','last_name','middle_initial','phone']
-    )
+    post_hook=
+      apply_pii_masking(
+        relation='silver.silver_hr',
+        string_cols=['first_name','last_name','middle_initial','phone']
+      )
+      +
+      apply_classification_tags(
+        relation='silver.silver_hr',
+        tags={
+          'employee_id': 'confidential',
+          'manager_id': 'confidential',
+          'first_name': 'restricted_pii',
+          'last_name': 'restricted_pii',
+          'middle_initial': 'restricted_pii',
+          'job_code': 'internal',
+          'branch': 'internal',
+          'office': 'internal',
+          'phone': 'restricted_pii',
+          '_batch_id': 'internal',
+          '_loaded_at': 'internal'
+        }
+      )
 ) }}
 {#-
     Archetype A: static reference dimension, Batch1 only, no CDC.

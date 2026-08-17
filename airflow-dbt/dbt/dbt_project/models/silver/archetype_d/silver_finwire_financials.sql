@@ -1,3 +1,31 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_finwire_financials',
+      tags={
+        'posting_ts': 'internal',
+        'year': 'public',
+        'quarter': 'public',
+        'qtr_start_date': 'public',
+        'posting_date': 'public',
+        'revenue': 'public',
+        'earnings': 'public',
+        'eps': 'public',
+        'diluted_eps': 'public',
+        'margin': 'public',
+        'inventory': 'public',
+        'assets': 'public',
+        'liabilities': 'public',
+        'shares_outstanding': 'public',
+        'diluted_shares_outstanding': 'public',
+        'company_name': 'public',
+        'company_cik': 'public',
+        '_batch_id': 'internal',
+        '_row_hash': 'internal',
+        '_loaded_at': 'internal'
+      }
+    )
+) }}
 {#-
     Archetype D (parsed): Batch1 only, append-only-by-PTS, no CDC columns
     in the source file at all. Natural key uses coalesce(cik, name) since

@@ -2,7 +2,21 @@
     config(
         materialized='incremental',
         incremental_strategy='append',
-        on_schema_change='fail'
+        on_schema_change='fail',
+        post_hook=apply_classification_tags(
+            relation='silver.silver_holding_history',
+          tags={
+            'originating_trade_id': 'internal',
+            'trade_id': 'internal',
+            'qty_before': 'confidential',
+            'qty_after': 'confidential',
+            '_cdc_flag': 'internal',
+            '_cdc_dsn': 'internal',
+            '_batch_id': 'internal',
+            '_row_hash': 'internal',
+            '_loaded_at': 'internal'
+          }
+        )
     )
 }}
 

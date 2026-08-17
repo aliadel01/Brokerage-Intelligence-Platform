@@ -1,3 +1,17 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.fact_watchitem',
+      tags={
+        'customer_sk': 'internal',
+        'security_sk': 'internal',
+        'watch_date_sk': 'internal',
+        'watch_time_sk': 'internal',
+        'action_code': 'internal',
+        'batch_id': 'internal'
+      }
+    )
+) }}
 with watch as (
     select * from {{ ref('silver_watch_history') }}
 ),

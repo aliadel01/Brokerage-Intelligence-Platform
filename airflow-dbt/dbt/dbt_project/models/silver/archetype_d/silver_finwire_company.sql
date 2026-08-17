@@ -1,3 +1,29 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_finwire_company',
+      tags={
+        'posting_ts': 'internal',
+        'company_name': 'public',
+        'cik': 'public',
+        'status': 'internal',
+        'industry_id': 'public',
+        'sp_rating': 'public',
+        'founding_date': 'public',
+        'address_line1': 'public',
+        'address_line2': 'public',
+        'postal_code': 'public',
+        'city': 'public',
+        'state_province': 'public',
+        'country': 'public',
+        'ceo_name': 'confidential',
+        'description': 'public',
+        '_batch_id': 'internal',
+        '_row_hash': 'internal',
+        '_loaded_at': 'internal'
+      }
+    )
+) }}
 {#-
     Archetype D (parsed): Batch1 only, append-only-by-PTS, no CDC columns
     in the source file at all. Dedup by (cik, posting_ts) only removes

@@ -1,3 +1,19 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.fact_holding',
+      tags={
+        'originating_trade_id': 'internal',
+        'current_trade_id': 'internal',
+        'security_sk': 'internal',
+        'holding_date_sk': 'internal',
+        'account_sk': 'internal',
+        'before_quantity': 'confidential',
+        'after_quantity': 'confidential',
+        'batch_id': 'internal'
+      }
+    )
+) }}
 {#-
     account_sk/security_sk/holding_date_sk resolved from fact_trade via
     CURRENT/triggering trade_id (HH_T_ID -> silver's trade_id), per

@@ -2,7 +2,23 @@
     config(
         materialized='incremental',
         incremental_strategy='append',
-        on_schema_change='fail'
+        on_schema_change='fail',
+        post_hook=apply_classification_tags(
+            relation='silver.silver_daily_market',
+          tags={
+            'market_date': 'public',
+            'security_symbol': 'public',
+            'close_price': 'public',
+            'high_price': 'public',
+            'low_price': 'public',
+            'volume': 'public',
+            '_cdc_flag': 'internal',
+            '_cdc_dsn': 'internal',
+            '_batch_id': 'internal',
+            '_row_hash': 'internal',
+            '_loaded_at': 'internal'
+          }
+        )
     )
 }}
 

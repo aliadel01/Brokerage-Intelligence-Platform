@@ -1,3 +1,20 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.fact_trade_history',
+      tags={
+        'trade_sk': 'internal',
+        'trade_id': 'internal',
+        'account_sk': 'internal',
+        'security_sk': 'internal',
+        'status_type_sk': 'internal',
+        'status_date_sk': 'internal',
+        'status_time_sk': 'internal',
+        'source_model': 'internal',
+        'batch_id': 'internal'
+      }
+    )
+) }}
 {#-
     account_sk/security_sk resolved via lookup to fact_trade on trade_id
     (ADR-010). INNER JOIN to fact_trade deliberate (must run after

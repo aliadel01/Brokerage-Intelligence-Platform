@@ -1,3 +1,22 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.dim_account',
+      tags={
+        'account_sk': 'internal',
+        'account_id': 'confidential',
+        'account_name': 'confidential',
+        'tax_status': 'confidential',
+        'account_status': 'internal',
+        'broker_sk': 'internal',
+        'customer_sk': 'internal',
+        'effective_start_date': 'internal',
+        'effective_end_date': 'internal',
+        'is_current': 'internal',
+        'cdc_flag': 'internal'
+      }
+    )
+) }}
 {#-
     Grain: One row per account version (SCD Type 2), plus one Unknown
     member row (account_sk = -1) for fact FK coalesce targets.
@@ -43,7 +62,7 @@ unknown as (
         '-1'                 as account_sk,
         -1                  as account_id,
         'Unknown'           as account_name,
-        'Unknown'           as tax_status,
+        -1                  as tax_status,
         'Unknown'           as account_status,
         '-1'                as broker_sk,
         '-1'                as customer_sk,

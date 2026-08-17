@@ -1,3 +1,18 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_trade_history',
+      tags={
+        'trade_id': 'internal',
+        'status_ts': 'internal',
+        'status_id': 'internal',
+        '_batch_id': 'internal',
+        '_row_hash': 'internal',
+        '_loaded_at': 'internal',
+        '_source_model': 'internal'
+      }
+    )
+) }}
 {#-
     Per 04_silver.md ADR-002: Trade is split by concern into two models.
     This one owns the FULL cross-batch status-transition history for

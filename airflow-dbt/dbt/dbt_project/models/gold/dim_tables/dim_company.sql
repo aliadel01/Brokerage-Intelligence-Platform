@@ -1,3 +1,28 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.dim_company',
+      tags={
+        'company_sk': 'internal',
+        'company_cik': 'public',
+        'company_name': 'public',
+        'company_status': 'internal',
+        'sp_rating': 'public',
+        'founding_date': 'public',
+        'address_line1': 'public',
+        'address_line2': 'public',
+        'postal_code': 'public',
+        'city': 'public',
+        'state_province': 'public',
+        'country': 'public',
+        'ceo_name': 'confidential',
+        'company_description': 'public',
+        'industry_code': 'public',
+        'industry_name': 'public',
+        'sector_id': 'public'
+      }
+    )
+) }}
 {#-
     Grain: One row per company (latest version), plus one Unknown
     member row (company_sk = -1).

@@ -1,3 +1,18 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.fact_market_history',
+      tags={
+        'security_sk': 'internal',
+        'market_date_sk': 'internal',
+        'close_price': 'public',
+        'high_price': 'public',
+        'low_price': 'public',
+        'volume': 'public',
+        'batch_id': 'internal'
+      }
+    )
+) }}
 with market as (
     select * from {{ ref('silver_daily_market') }}
 ),

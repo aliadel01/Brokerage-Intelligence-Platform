@@ -1,9 +1,57 @@
 {{ config(
     materialized='table',
-    post_hook=apply_pii_masking(
-      string_cols=['tax_id','last_name','first_name','middle_name','gender','address_line1','address_line2','postal_code','city','state_province','country','phone1_country_code','phone1_area_code','phone1_local_number','phone1_extension','phone2_country_code','phone2_area_code','phone2_local_number','phone2_extension','phone3_country_code','phone3_area_code','phone3_local_number','phone3_extension','primary_email','alternate_email'],
-      date_cols=['date_of_birth']
-    )
+    post_hook=
+      apply_pii_masking(
+        relation='gold.dim_customer',
+        string_cols=['tax_id','last_name','first_name','middle_name','gender','address_line1','address_line2','postal_code','city','state_province','country','phone1_country_code','phone1_area_code','phone1_local_number','phone1_extension','phone2_country_code','phone2_area_code','phone2_local_number','phone2_extension','phone3_country_code','phone3_area_code','phone3_local_number','phone3_extension','primary_email','alternate_email'],
+        date_cols=['date_of_birth']
+      )
+      +
+      apply_classification_tags(
+        relation='gold.dim_customer',
+        tags={
+          'customer_sk': 'internal',
+          'customer_id': 'confidential',
+          'tax_id': 'restricted_pii',
+          'customer_status': 'internal',
+          'last_name': 'restricted_pii',
+          'first_name': 'restricted_pii',
+          'middle_name': 'restricted_pii',
+          'gender': 'restricted_pii',
+          'customer_tier': 'internal',
+          'date_of_birth': 'restricted_pii',
+          'address_line1': 'restricted_pii',
+          'address_line2': 'restricted_pii',
+          'postal_code': 'restricted_pii',
+          'city': 'restricted_pii',
+          'state_province': 'restricted_pii',
+          'country': 'restricted_pii',
+          'phone1_country_code': 'restricted_pii',
+          'phone1_area_code': 'restricted_pii',
+          'phone1_local_number': 'restricted_pii',
+          'phone1_extension': 'restricted_pii',
+          'phone2_country_code': 'restricted_pii',
+          'phone2_area_code': 'restricted_pii',
+          'phone2_local_number': 'restricted_pii',
+          'phone2_extension': 'restricted_pii',
+          'phone3_country_code': 'restricted_pii',
+          'phone3_area_code': 'restricted_pii',
+          'phone3_local_number': 'restricted_pii',
+          'phone3_extension': 'restricted_pii',
+          'primary_email': 'restricted_pii',
+          'alternate_email': 'restricted_pii',
+          'effective_start_date': 'internal',
+          'effective_end_date': 'internal',
+          'is_current': 'internal',
+          'cdc_flag': 'internal',
+          'local_tax_rate_code': 'internal',
+          'local_tax_rate_name': 'internal',
+          'local_tax_rate_pct': 'internal',
+          'national_tax_rate_code': 'internal',
+          'national_tax_rate_name': 'internal',
+          'national_tax_rate_pct': 'internal'
+        }
+      )
 ) }}
 {#-
     Grain: One row per customer version (SCD Type 2), plus one Unknown
@@ -32,7 +80,7 @@ final as (
         customer.first_name,
         customer.middle_name,
         coalesce(customer.gender, 'Unknown')               as gender,
-        coalesce(customer.tier, 'Unknown')                 as customer_tier,
+        coalesce(customer.tier, -1)                 as customer_tier,
         customer.date_of_birth,
         customer.address_line1,
         customer.address_line2,
@@ -81,7 +129,7 @@ unknown as (
         'Unknown'             as first_name,
         cast(null as varchar) as middle_name,
         'Unknown'             as gender,
-        'Unknown'             as customer_tier,
+        -1                      as customer_tier,
         cast(null as date)    as date_of_birth,
         cast(null as varchar) as address_line1,
         cast(null as varchar) as address_line2,

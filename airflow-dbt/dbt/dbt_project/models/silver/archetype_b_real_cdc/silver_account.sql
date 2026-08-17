@@ -1,3 +1,24 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_account',
+      tags={
+        'account_version_sk': 'internal',
+        'account_id': 'confidential',
+        'broker_id': 'internal',
+        'customer_id': 'confidential',
+        'account_name': 'confidential',
+        'tax_status': 'confidential',
+        'status_id': 'internal',
+        'cdc_flag': 'internal',
+        'valid_from_date': 'internal',
+        'valid_to_date': 'internal',
+        'is_current': 'internal',
+        '_batch_id': 'internal',
+        '_source_table': 'internal'
+      }
+    )
+) }}
 {#-
     SCD Type 2, unifying two bronze sources for the same entity:
       - bronze_account: real flat-file CDC, Batch2/3 onward.

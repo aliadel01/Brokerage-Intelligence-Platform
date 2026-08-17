@@ -1,9 +1,54 @@
 {{ config(
     materialized='table',
-    post_hook=apply_pii_masking(
-      string_cols=['last_name','first_name','middle_name','gender','address_line1','address_line2','postal_code','city','state_province','country','primary_email','alternate_email','tax_id','phone1_country_code','phone1_area_code','phone1_number','phone1_extension','phone2_country_code','phone2_area_code','phone2_number','phone2_extension','phone3_country_code','phone3_area_code','phone3_number','phone3_extension'],
-      date_cols=['date_of_birth']
-    )
+    post_hook=
+      apply_pii_masking(
+        relation='silver.silver_customer',
+        string_cols=['last_name','first_name','middle_name','gender','address_line1','address_line2','postal_code','city','state_province','country','primary_email','alternate_email','tax_id','phone1_country_code','phone1_area_code','phone1_number','phone1_extension','phone2_country_code','phone2_area_code','phone2_number','phone2_extension','phone3_country_code','phone3_area_code','phone3_number','phone3_extension'],
+        date_cols=['date_of_birth']
+      )
+      +
+      apply_classification_tags(
+        relation='silver.silver_customer',
+        tags={
+          'customer_version_sk': 'internal',
+          'customer_id': 'confidential',
+          'last_name': 'restricted_pii',
+          'first_name': 'restricted_pii',
+          'middle_name': 'restricted_pii',
+          'gender': 'restricted_pii',
+          'tier': 'internal',
+          'date_of_birth': 'restricted_pii',
+          'address_line1': 'restricted_pii',
+          'address_line2': 'restricted_pii',
+          'postal_code': 'restricted_pii',
+          'city': 'restricted_pii',
+          'state_province': 'restricted_pii',
+          'country': 'restricted_pii',
+          'primary_email': 'restricted_pii',
+          'alternate_email': 'restricted_pii',
+          'tax_id': 'restricted_pii',
+          'local_tax_rate_id': 'internal',
+          'national_tax_rate_id': 'internal',
+          'phone1_country_code': 'restricted_pii',
+          'phone1_area_code': 'restricted_pii',
+          'phone1_number': 'restricted_pii',
+          'phone1_extension': 'restricted_pii',
+          'phone2_country_code': 'restricted_pii',
+          'phone2_area_code': 'restricted_pii',
+          'phone2_number': 'restricted_pii',
+          'phone2_extension': 'restricted_pii',
+          'phone3_country_code': 'restricted_pii',
+          'phone3_area_code': 'restricted_pii',
+          'phone3_number': 'restricted_pii',
+          'phone3_extension': 'restricted_pii',
+          'status_id': 'internal',
+          'cdc_flag': 'internal',
+          'valid_from_date': 'internal',
+          'valid_to_date': 'internal',
+          '_batch_id': 'internal',
+          '_source_table': 'internal'
+        }
+      )
 ) }}
 {#-
     SCD Type 2, unifying two bronze sources for the same entity:

@@ -1,3 +1,15 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_status_type',
+      tags={
+        'status_id': 'public',
+        'status_name': 'public',
+        '_batch_id': 'internal',
+        '_loaded_at': 'internal'
+      }
+    )
+) }}
 {#-
     Archetype A: static reference dimension, Batch1 only, no CDC.
 -#}

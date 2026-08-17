@@ -1,3 +1,29 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.dim_date',
+      tags={
+        'date_sk': 'public',
+        'date_value': 'public',
+        'date_desc': 'public',
+        'calendar_year': 'public',
+        'calendar_year_desc': 'public',
+        'calendar_qtr_id': 'public',
+        'calendar_qtr_desc': 'public',
+        'calendar_month_id': 'public',
+        'calendar_month_desc': 'public',
+        'calendar_week_id': 'public',
+        'calendar_week_desc': 'public',
+        'day_of_week_num': 'public',
+        'day_of_week_desc': 'public',
+        'fiscal_year': 'public',
+        'fiscal_year_desc': 'public',
+        'fiscal_qtr_id': 'public',
+        'fiscal_qtr_desc': 'public',
+        'is_holiday': 'public'
+      }
+    )
+) }}
 {#-
     Archetype A pass-through, plus one Unknown member row (date_sk = -1).
 -#}

@@ -1,3 +1,22 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.dim_security',
+      tags={
+        'security_sk': 'internal',
+        'symbol': 'public',
+        'issue_type': 'public',
+        'security_status': 'public',
+        'security_name': 'public',
+        'exchange_id': 'public',
+        'shares_outstanding': 'public',
+        'first_trade_date': 'public',
+        'first_trade_exchange_date': 'public',
+        'dividend': 'public',
+        'company_sk': 'internal'
+      }
+    )
+) }}
 {#-
     Grain: One row per symbol (latest version), plus one Unknown
     member row (security_sk = -1, company_sk = -1 pointing to

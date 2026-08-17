@@ -1,8 +1,34 @@
 {{ config(
     materialized='table',
-    post_hook=apply_pii_masking(
-      string_cols=['executor_name']
-    )
+    post_hook=
+      apply_pii_masking(
+        relation='gold.fact_trade',
+        string_cols=['executor_name']
+      )
+      +
+      apply_classification_tags(
+        relation='gold.fact_trade',
+        tags={
+          'trade_sk': 'internal',
+          'trade_id': 'internal',
+          'security_sk': 'internal',
+          'trade_date_sk': 'internal',
+          'trade_time_sk': 'internal',
+          'status_type_sk': 'internal',
+          'trade_type_sk': 'internal',
+          'is_cash_flag': 'internal',
+          'quantity': 'internal',
+          'bid_price': 'internal',
+          'account_sk': 'internal',
+          'executor_name': 'restricted_pii',
+          'trade_price': 'confidential',
+          'charge_amount': 'confidential',
+          'commission_amount': 'confidential',
+          'tax_amount': 'confidential',
+          'cdc_flag': 'internal',
+          'batch_id': 'internal'
+        }
+      )
 ) }}
 {#-
     trade_sk NOT hashed -- trade_id directly (ADR-007).

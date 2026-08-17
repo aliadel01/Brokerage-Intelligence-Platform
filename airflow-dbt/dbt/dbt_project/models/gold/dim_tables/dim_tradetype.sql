@@ -1,3 +1,16 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.dim_tradetype',
+      tags={
+        'trade_type_sk': 'internal',
+        'trade_type_code': 'public',
+        'trade_type_name': 'public',
+        'is_sell_flag': 'public',
+        'is_market_order_flag': 'public'
+      }
+    )
+) }}
 with final as (
     select
         {{ gen_surrogate_key(['trade_type_id']) }} as trade_type_sk,

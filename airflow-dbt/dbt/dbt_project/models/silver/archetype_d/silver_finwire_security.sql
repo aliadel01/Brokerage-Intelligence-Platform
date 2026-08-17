@@ -1,3 +1,26 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_finwire_security',
+      tags={
+        'posting_ts': 'internal',
+        'security_symbol': 'public',
+        'issue_type': 'public',
+        'status': 'public',
+        'security_name': 'public',
+        'exchange_id': 'public',
+        'shares_outstanding': 'public',
+        'first_trade_date': 'public',
+        'first_trade_exchange_date': 'public',
+        'dividend': 'public',
+        'company_name': 'public',
+        'company_cik': 'public',
+        '_batch_id': 'internal',
+        '_row_hash': 'internal',
+        '_loaded_at': 'internal'
+      }
+    )
+) }}
 {#-
     Grain: One row per (security_symbol, posting_ts).
     

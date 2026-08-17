@@ -22,12 +22,37 @@ of unrelated fixes:
 | **Integrity** | Do relationships between tables (keys, FKs) hold? |
 
 ## Table of contents
-- [6.1 Bronze Layer — Ingestion Controls](#61-bronze-layer--ingestion-controls)
-- [6.2 Silver Layer — Testing & Validation Framework](#62-silver-layer--testing--validation-framework)
-- [6.3 Reconciliation Framework](#63-reconciliation-framework)
-- [6.4 Test Result Observability & Logging](#64-test-result-observability--logging)
-- [6.5 Gold Layer — Presentation-Layer Controls](#65-gold-layer--presentation-layer-controls)
-- [Open items](#open-items)
+- [6. Data Quality, Trust \& Consistency Framework](#6-data-quality-trust--consistency-framework)
+  - [Table of contents](#table-of-contents)
+  - [6.1 Bronze Layer — Ingestion Controls](#61-bronze-layer--ingestion-controls)
+    - [6.1.1 Validity — schema drift (wrong shape)](#611-validity--schema-drift-wrong-shape)
+    - [6.1.2 Validity — bad values (right shape, wrong content)](#612-validity--bad-values-right-shape-wrong-content)
+    - [6.1.3 Completeness — silent failures (superseded design)](#613-completeness--silent-failures-superseded-design)
+    - [6.1.4 Integrity — the one control value that cannot fail silently](#614-integrity--the-one-control-value-that-cannot-fail-silently)
+    - [6.1.5 Consistency — loader output vs. table shape drift](#615-consistency--loader-output-vs-table-shape-drift)
+    - [6.1.6 Uniqueness — running the same batch twice by accident](#616-uniqueness--running-the-same-batch-twice-by-accident)
+    - [6.1.7 Completeness — a missing control file breaking the safety net silently](#617-completeness--a-missing-control-file-breaking-the-safety-net-silently)
+    - [6.1.8 Accuracy — trusting our own pipeline's numbers](#618-accuracy--trusting-our-own-pipelines-numbers)
+    - [6.1.9 DQ-as-Control on ingestion](#619-dq-as-control-on-ingestion)
+    - [6.1.10 Timeliness — data freshness](#6110-timeliness--data-freshness)
+    - [6.1.11 Metadata backbone](#6111-metadata-backbone)
+  - [6.2 Silver Layer — Testing \& Validation Framework](#62-silver-layer--testing--validation-framework)
+    - [6.2.1 dbt generic tests \& referential integrity](#621-dbt-generic-tests--referential-integrity)
+    - [6.2.2 SCD2-specific checks (Account / Customer)](#622-scd2-specific-checks-account--customer)
+    - [6.2.3 Business-rule tests (custom singular tests)](#623-business-rule-tests-custom-singular-tests)
+    - [6.2.4 Accepted-value domains](#624-accepted-value-domains)
+  - [6.3 Reconciliation Framework](#63-reconciliation-framework)
+  - [6.4 Test Result Observability \& Logging](#64-test-result-observability--logging)
+    - [6.4.1 `governance.dbt_test_results` (summary table)](#641-governancedbt_test_results-summary-table)
+    - [6.4.2 `dbt_project.yml` — native `store_failures`](#642-dbt_projectyml--native-store_failures)
+    - [6.4.3 `log_test_results()` macro (`macros/log_test_results.sql`)](#643-log_test_results-macro-macroslog_test_resultssql)
+    - [6.4.4 Day-to-day usage](#644-day-to-day-usage)
+    - [6.4.5 ADR — custom test-result logging over the Elementary package](#645-adr--custom-test-result-logging-over-the-elementary-package)
+  - [6.5 Gold Layer — Presentation-Layer Controls](#65-gold-layer--presentation-layer-controls)
+    - [6.5.1 Completeness — unknown-member rows, fact FK columns never `NULL`](#651-completeness--unknown-member-rows-fact-fk-columns-never-null)
+    - [6.5.2 Consistency — dimension attribute NULL fill](#652-consistency--dimension-attribute-null-fill)
+    - [6.5.3 Integrity \& grain tests](#653-integrity--grain-tests)
+  - [Open items](#open-items)
 
 ---
 
@@ -315,7 +340,7 @@ targeting a distinct integrity dimension:
 
 - **Illegal trade status state transitions** — a singular test asserts
   the trade lifecycle never moves through an invalid status sequence
-  (Consistency).
+  `test/silver_trade_history/assert_trade_status_order.sql`.
 - **False versioning in tracked SCD2 entities** — a singular test
   asserts a new SCD2 version is only created when a *tracked* column
   actually changed value, not on every event (Uniqueness — prevents

@@ -1,3 +1,23 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_time',
+      tags={
+        'time_sk': 'public',
+        'time_value': 'public',
+        'hour_id': 'public',
+        'hour_desc': 'public',
+        'minute_id': 'public',
+        'minute_desc': 'public',
+        'second_id': 'public',
+        'second_desc': 'public',
+        'market_hours_flag': 'public',
+        'office_hours_flag': 'public',
+        '_batch_id': 'internal',
+        '_loaded_at': 'internal'
+      }
+    )
+) }}
 {#-
     Archetype A: static reference dimension, Batch1 only, no CDC.
 -#}

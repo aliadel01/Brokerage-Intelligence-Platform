@@ -1,8 +1,32 @@
 {{ config(
     materialized='table',
-    post_hook=apply_pii_masking(
-      string_cols=['execution_name']
-    )
+    post_hook=
+      apply_pii_masking(
+        relation='silver.silver_trade',
+        string_cols=['execution_name']
+      )
+      +
+      apply_classification_tags(
+        relation='silver.silver_trade',
+        tags={
+          'trade_id': 'internal',
+          'status_id': 'internal',
+          'trade_type_id': 'internal',
+          'is_cash': 'internal',
+          'symbol': 'internal',
+          'quantity': 'internal',
+          'bid_price': 'internal',
+          'customer_account_id': 'confidential',
+          'execution_name': 'restricted_pii',
+          'trade_price': 'confidential',
+          'charge': 'confidential',
+          'commission': 'confidential',
+          'tax': 'confidential',
+          'cdc_flag': 'internal',
+          'trade_timestamp': 'internal',
+          '_batch_id': 'internal'
+        }
+      )
 ) }}
 {#-
     Per 04_silver.md ADR-002: Trade is split by concern into two models.

@@ -1,3 +1,16 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_tax_rate',
+      tags={
+        'tax_rate_id': 'public',
+        'tax_rate_name': 'public',
+        'tax_rate': 'public',
+        '_batch_id': 'internal',
+        '_loaded_at': 'internal'
+      }
+    )
+) }}
 {#-
     Archetype A: static reference dimension, Batch1 only, no CDC.
 -#}

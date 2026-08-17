@@ -296,9 +296,6 @@ Access is enforced at three points, from broadest to narrowest:
 ---
 ## 7.7 PII Masking & Privacy Controls
 
-Reusable masking policies live in `governance`
-(`sql/masking_policy`), applied per column rather than duplicated per
-table:
 
 - **Policies:** `mask_pii_string`, `mask_pii_date`, `mask_pii_numeric`
   — applied on every `restricted_pii` column, across bronze, silver, and gold.
@@ -319,7 +316,7 @@ attach point:
   one-time manual attach is sufficient; only a future schema change
   would need a re-run.
 - **Silver / Gold:** applied automatically on every dbt build, via the
-  `apply_pii_masking()` macro (`macros/apply_pii_masking.sql`) wired
+  `apply_pii_masking()` macro (`macros/governance/apply_pii_masking.sql`) wired
   into each model's `post_hook`:
 
 ```sql

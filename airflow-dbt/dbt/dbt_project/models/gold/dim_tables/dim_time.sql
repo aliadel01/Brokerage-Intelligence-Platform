@@ -1,3 +1,21 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.dim_time',
+      tags={
+        'time_sk': 'public',
+        'time_value': 'public',
+        'hour_id': 'public',
+        'hour_desc': 'public',
+        'minute_id': 'public',
+        'minute_desc': 'public',
+        'second_id': 'public',
+        'second_desc': 'public',
+        'is_market_hours': 'public',
+        'is_office_hours': 'public'
+      }
+    )
+) }}
 {#-
     Archetype A pass-through, plus one Unknown member row (time_sk = -1).
 -#}

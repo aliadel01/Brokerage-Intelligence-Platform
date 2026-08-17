@@ -2,7 +2,21 @@
     config(
         materialized='incremental',
         incremental_strategy='append',
-        on_schema_change='fail'
+        on_schema_change='fail',
+        post_hook=apply_classification_tags(
+            relation='silver.silver_watch_history',
+          tags={
+            'customer_id': 'confidential',
+            'security_symbol': 'public',
+            'event_ts': 'internal',
+            'watch_action': 'internal',
+            '_cdc_flag': 'internal',
+            '_cdc_dsn': 'internal',
+            '_batch_id': 'internal',
+            '_row_hash': 'internal',
+            '_loaded_at': 'internal'
+          }
+        )
     )
 }}
 

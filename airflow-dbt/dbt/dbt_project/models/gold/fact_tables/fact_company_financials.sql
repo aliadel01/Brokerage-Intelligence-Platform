@@ -1,3 +1,27 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='gold.fact_company_financials',
+      tags={
+        'company_sk': 'internal',
+        'fiscal_date_sk': 'public',
+        'fiscal_year': 'public',
+        'fiscal_quarter': 'public',
+        'revenue': 'public',
+        'earnings': 'public',
+        'eps_basic': 'public',
+        'eps_diluted': 'public',
+        'profit_margin': 'public',
+        'inventory': 'public',
+        'total_assets': 'public',
+        'total_liabilities': 'public',
+        'shares_outstanding': 'public',
+        'diluted_shares_outstanding': 'public',
+        'batch_id': 'internal',
+        'posting_date_sk': 'internal'
+      }
+    )
+) }}
 {#-
     year/quarter kept as degenerate dims per gold.md ADR-009.
     fiscal_date_sk from qtr_start_date; posting_date_sk from

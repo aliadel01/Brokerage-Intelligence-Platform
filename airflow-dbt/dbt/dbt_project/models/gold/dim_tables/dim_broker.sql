@@ -1,8 +1,26 @@
 {{ config(
     materialized='table',
-    post_hook=apply_pii_masking(
-      string_cols=['first_name','last_name','middle_initial','phone_number']
-    )
+    post_hook=
+      apply_pii_masking(
+        relation='gold.dim_broker',
+        string_cols=['first_name','last_name','middle_initial','phone_number']
+      )
+      +
+      apply_classification_tags(
+        relation='gold.dim_broker',
+        tags={
+          'broker_sk': 'internal',
+          'employee_id': 'confidential',
+          'manager_employee_id': 'confidential',
+          'first_name': 'restricted_pii',
+          'last_name': 'restricted_pii',
+          'middle_initial': 'restricted_pii',
+          'job_code': 'internal',
+          'branch_name': 'internal',
+          'office_code': 'internal',
+          'phone_number': 'restricted_pii'
+        }
+      )
 ) }}
 with final as (
     select

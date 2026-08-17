@@ -1,3 +1,17 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+      relation='gold.fact_cashtransaction',  
+      tags={
+        'transaction_date_sk': 'internal',
+        'transaction_time_sk': 'internal',
+        'account_sk': 'internal',
+        'amount': 'confidential',
+        'description': 'confidential',
+        'batch_id': 'internal'
+      }
+    )
+) }}
 with cash as (
     select * from {{ ref('silver_cash_transaction') }}
 ),

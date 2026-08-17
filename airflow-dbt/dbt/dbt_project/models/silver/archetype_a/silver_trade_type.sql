@@ -1,3 +1,17 @@
+{{ config(
+    materialized='table',
+    post_hook=apply_classification_tags(
+        relation='silver.silver_trade_type',
+      tags={
+        'trade_type_id': 'public',
+        'trade_type_name': 'public',
+        'is_sell_flag': 'public',
+        'is_market_flag': 'public',
+        '_batch_id': 'internal',
+        '_loaded_at': 'internal'
+      }
+    )
+) }}
 {#-
     Archetype A: static reference dimension, Batch1 only, no CDC.
     tt_is_sell / tt_is_mrkt arrive from bronze as NUMBER(1) flags (kept
