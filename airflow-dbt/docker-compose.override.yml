@@ -2,18 +2,24 @@ version: "3"
 services:
   scheduler:
     volumes:
-      - ./dbt_project:/usr/local/airflow/dbt/dbt_project:rw
-      - ./scripts:/usr/local/airflow/scripts:rw
+      - ./dbt/dbt_project:/usr/local/airflow/dbt/dbt_project:rw
       - ./logs:/usr/local/airflow/logs:rw
+      - ./config:/usr/local/airflow/config:rw
+      - ../ingestion:/usr/local/airflow/ingestion:rw
+      - ../data:/usr/local/airflow/data:rw
 
   webserver:
     volumes:
-      - ./dbt_project:/usr/local/airflow/dbt/dbt_project:rw
-      - ./scripts:/usr/local/airflow/scripts:rw
+      - ./dbt/dbt_project:/usr/local/airflow/dbt/dbt_project:rw
       - ./logs:/usr/local/airflow/logs:rw
+      - ./config:/usr/local/airflow/config:rw
+      - ../ingestion:/usr/local/airflow/ingestion:rw
+      - ../data:/usr/local/airflow/data:rw
 
   triggerer:
     volumes:
-      - ./dbt_project:/usr/local/airflow/dbt/dbt_project:rw
-      - ./scripts:/usr/local/airflow/scripts:rw
+      - ./dbt/dbt_project:/usr/local/airflow/dbt/dbt_project:rw
       - ./logs:/usr/local/airflow/logs:rw
+      - ./config:/usr/local/airflow/config:rw
+      - ../ingestion:/usr/local/airflow/ingestion:rw
+      - ../data:/usr/local/airflow/data:rw

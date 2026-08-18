@@ -1,6 +1,7 @@
 ## Table of Contents
-1. [Setup TPC-DI & Generate Sample Data](#setup-tpc-di--generate-sample-data)
-2. [Initialize Airflow with dbt using Astro](#initialize-airflow-with-dbt-using-astro)
+- [Table of Contents](#table-of-contents)
+- [Setup TPC-DI \& Generate Sample Data](#setup-tpc-di--generate-sample-data)
+- [Initialize Airflow with dbt using Astro](#initialize-airflow-with-dbt-using-astro)
 
 
 
@@ -19,6 +20,8 @@ After installing the Astro CLI, you can initialize your Airflow project with dbt
     pandas
     elementary-data[snowflake]
     astro-run-dag 
+    snowflake-connector-python>=3.12.3
+    python-dotenv>=1.0.1
     ```
 - Add `dbt-snowflake` to dbt-requirements.txt.
 - Add [docker-compose.override.yml](../airflow/docker-compose.override.yml).
@@ -34,3 +37,12 @@ After installing the Astro CLI, you can initialize your Airflow project with dbt
         ```
 - Install dbt using `pip install -r dbt-requirements.txt` -> it will install dbt-snowflake and its dependencies like `dbt-core`.
 - Run `dbt debug` to verify the dbt connection to Snowflake.
+- Add airflow connections for Snowflake using the following command:
+    ```bash
+    airflow connections add 'snowflake_default' \
+        --conn-type 'snowflake' \
+        --conn-json '{"account": "", "warehouse": "", "database": "brokerage_dwh", "region": "", "role": ""}' \
+        --conn-login '' \
+        --conn-password ''
+    ```
+    this should run in the Airflow container `astro dev bash` and not in the host machine terminal.
