@@ -107,7 +107,8 @@ This makes the loader driven by the file's actual shape, not the batch
 number — it stays correct even if a schema shift lands on a different
 batch than expected.
 
-> [!NOTE] Each delimited source has a `cdc_capable` flag in `config.py` so `_split_cdc()` knows whether to expect CDC columns at all.
+> [!NOTE]
+> Each delimited source has a `cdc_capable` flag in `config.py` so `_split_cdc()` knows whether to expect CDC columns at all.
 
 
 ### 3.3.2 `finwire_loader.py` — polymorphic fixed-width dispatch
@@ -249,7 +250,8 @@ the batch would finish without ever writing a row to
 everything again on top — no warning, no dedup. Checking file
 existence before the idempotency check closes that gap at the source.
 
-> [!IMPORTANT] Two things this design deliberately does **not** do:
+> [!IMPORTANT]
+> Two things this design deliberately does **not** do:
 > - Distinguish "batch completed successfully" from "batch partially
   loaded, then failed" — both look identical (existing row found →
   block unless `--force`). Recovery is always full re-run with
